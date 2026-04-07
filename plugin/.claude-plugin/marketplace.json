@@ -1,5 +1,9 @@
 {
   "name": "sidequest-plugin",
+  "owner": {
+    "name": "SideQuest AI",
+    "email": "hello@trysidequest.ai"
+  },
   "plugins": [
     {
       "name": "sidequest",
