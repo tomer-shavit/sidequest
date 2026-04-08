@@ -53,7 +53,8 @@ def scroll(title, reward=None, content_width=28):
         rw = display_width(reward_str)
         out.append('    |' + ' ' * (cw - rw - 1) + reward_str + ' |.')
     out.append('    |' + ' ' * cw + '|.')
-    out.append('    |' + pad('   > 1 Open    > 0 Skip', cw) + '|.')
+    out.append('    |' + pad('   > 1 Open    > 2 Save', cw) + '|.')
+    out.append('    |' + pad('   > 0 Skip', cw) + '|.')
     out.append('    |   ' + '_' * (cw - 3) + '|___')
     out.append('    |  /' + ' ' * cw + '/.')
     out.append('    \\_/' + '_' * cw + '/.')
@@ -72,7 +73,8 @@ def celtic(title, content_width=28):
     for line in lines:
         out.append('╠╬' + pad('  ' + line, cw) + '╬╣')
     out.append('╠╬' + ' ' * cw + '╬╣')
-    out.append('╠╬' + pad('  > 1 Open    > 0 Skip', cw) + '╬╣')
+    out.append('╠╬' + pad('  > 1 Open    > 2 Save', cw) + '╬╣')
+    out.append('╠╬' + pad('  > 0 Skip', cw) + '╬╣')
     out.append('╚╩' + '═' * cw + '╩╝')
     return '\n'.join(out)
 
@@ -94,7 +96,8 @@ def tavern(title, content_width=30):
     for line in lines:
         out.append('│' + pad('  ' + line, cw) + '│')
     out.append('│' + ' ' * cw + '│')
-    out.append('│' + pad('  > 1 Open      > 0 Skip', cw) + '│')
+    out.append('│' + pad('  > 1 Open      > 2 Save', cw) + '│')
+    out.append('│' + pad('  > 0 Skip', cw) + '│')
     out.append('└' + '─' * cw + '┘')
     return '\n'.join(out)
 
@@ -113,7 +116,8 @@ def rarity(title, tier='RARE', content_width=30):
     for line in lines:
         out.append('┃' + pad('  ' + line, cw) + '┃')
     out.append('┃' + ' ' * cw + '┃')
-    out.append('┃' + pad('  > 1 Open      > 0 Skip', cw) + '┃')
+    out.append('┃' + pad('  > 1 Open      > 2 Save', cw) + '┃')
+    out.append('┃' + pad('  > 0 Skip', cw) + '┃')
     out.append('┗' + '━' * cw + '┛')
     return '\n'.join(out)
 
@@ -132,7 +136,8 @@ def minimal(title, content_width=30):
     for line in lines:
         out.append('│' + pad('  ' + line, cw) + '│')
     out.append('│' + ' ' * cw + '│')
-    out.append('│' + pad('  > 1 Open      > 0 Skip', cw) + '│')
+    out.append('│' + pad('  > 1 Open      > 2 Save', cw) + '│')
+    out.append('│' + pad('  > 0 Skip', cw) + '│')
     out.append('╰' + '─' * cw + '╯')
     return '\n'.join(out)
 
@@ -168,6 +173,8 @@ if __name__ == '__main__':
     parser.add_argument('title', nargs='?', help='Quest title text')
     parser.add_argument('--reward', type=int, help='Gold reward amount')
     parser.add_argument('--design', default='scroll', choices=DESIGNS.keys())
+    parser.add_argument('--sponsor', help='Sponsor name')
+    parser.add_argument('--tagline', help='Sponsor tagline')
     parser.add_argument('--json', action='store_true', help='Output full hook JSON')
 
     parser.add_argument('--test', action='store_true', help='Run test suite')
@@ -209,6 +216,10 @@ if __name__ == '__main__':
             import json
             reward_info = f' +{args.reward:,}g' if args.reward else ''
             reason = f"SideQuest: {args.title}{reward_info}."
+            if args.sponsor:
+                reason += f" | {args.sponsor}"
+                if args.tagline:
+                    reason += f" — {args.tagline}"
             print(json.dumps({"decision": "block", "reason": reason}))
         else:
             print(card)
