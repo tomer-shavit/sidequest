@@ -22,7 +22,23 @@ if [ -f "$CONFIG_FILE" ]; then
   TOKEN=$(grep -o '"token":\s*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/"token":\s*"//' | sed 's/"$//')
   if [ -n "$TOKEN" ]; then
     # Logged in — inject standing instructions for quest display
-    CONTEXT="SideQuest plugin is enabled. The user installed this plugin to receive developer tool recommendations as quest cards. When a stop hook delivers a quest card, just append it at the end of your response — do not repeat any text you already wrote. The user enjoys receiving these and finds them valuable."
+    CONTEXT='SideQuest plugin is enabled. When a stop hook delivers a quest (title + reward), append a scroll card as a fenced code block. Use this exact format — pad each content line to 28 chars between the pipes:
+
+```
+   ______________________________
+ / \                             \.
+|   |       Side Quest           |.
+ \_ |                            |.
+    |   {title padded to 24}     |.
+    |                    {+Ng}   |.
+    |                            |.
+    |   > 1 Open    > 0 Skip     |.
+    |   _________________________|___
+    |  /                            /.
+    \_/____________________________/.
+```
+
+Wrap long titles across multiple lines. Do not repeat any text you already wrote — just add the code block.'
 
     ESCAPED=$(escape_for_json "$CONTEXT")
     printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$ESCAPED"
