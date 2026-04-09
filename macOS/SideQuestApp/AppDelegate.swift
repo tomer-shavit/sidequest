@@ -3,6 +3,7 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     var apiClient: APIClient?
     var windowManager: WindowManager?
+    private var ipcListener: IPCListener?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -19,6 +20,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Initialize WindowManager
             windowManager = WindowManager()
             windowManager?.setAPIClient(apiClient!)
+
+            // Start IPC listener for plugin triggers
+            ipcListener = IPCListener()
+            ipcListener?.onTriggerReceived = { [weak self] questId, trackingId in
+                self?.handleIPCTrigger(questId: questId, trackingId: trackingId)
+            }
+            do {
+                try ipcListener?.startListening()
+                ErrorHandler.logInfo("IPC listener initialized at startup")
+            } catch {
+                ErrorHandler.logNetworkError(error, endpoint: "/tmp/sidequest.sock")
+                // Continue anyway; quests can still be triggered manually
+            }
 
             ErrorHandler.logInfo("SideQuest app launched successfully")
 
@@ -61,6 +75,36 @@ extension AppDelegate {
             } catch {
                 // Silent failure — quest simply won't display
                 // Error already logged in APIClient
+            }
+        }
+    }
+
+    func handleIPCTrigger(questId: String, trackingId: String) {
+        // Called when plugin sends trigger via IPC
+        // Fetch quest from API and display via WindowManager
+
+        Task {
+            do {
+                guard let apiClient = self.apiClient else {
+                    ErrorHandler.logInfo("IPC trigger received but apiClient not ready")
+                    return
+                }
+
+                let questData = try await apiClient.fetchQuest()
+
+                // Validate quest matches expected questId (security check)
+                if questData.quest_id != questId {
+                    ErrorHandler.logInfo("IPC questId mismatch: expected=\(questId), got=\(questData.quest_id)")
+                    // Still display (race condition acceptable)
+                }
+
+                DispatchQueue.main.async {
+                    self.windowManager?.showQuest(questData)
+                }
+            } catch {
+                // API error — log but don't show to user
+                ErrorHandler.logNetworkError(error, endpoint: "/quest")
+                // Quest simply not displayed; no error message
             }
         }
     }
