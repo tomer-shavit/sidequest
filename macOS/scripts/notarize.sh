@@ -11,12 +11,12 @@
 # 2. Apple Developer account with app-specific password
 #
 # Environment variables (required before running):
-#   export APPLE_ID="your.email@example.com"
-#   export APPLE_TEAM_ID="ABC123DEFG"  # 10-char team ID from Apple Developer account
-#   export APPLE_PASSWORD="abcd-efgh-ijkl-mnop"  # App-specific password from Apple ID > Sign In and Security > App passwords
+#   export APPLE_ID=<your-apple-developer-email>
+#   export APPLE_TEAM_ID=<your-10-char-team-id>
+#   export APPLE_PASSWORD=<your-app-specific-password>
 #
 # Or store password in macOS Keychain:
-#   security add-generic-password -s "apple-notarization" -a "$APPLE_ID" -w "your-password"
+#   security add-generic-password -s "apple-notarization" -a "$APPLE_ID" -w <your-password>
 #
 # Usage:
 #   ./macOS/scripts/notarize.sh build/Release/SideQuest.app [--timeout 10h] [--verbose]
@@ -98,7 +98,7 @@ if [ -z "${APPLE_ID:-}" ]; then
   log_error "APPLE_ID environment variable not set"
   echo ""
   echo "Set your Apple Developer email:"
-  echo "  export APPLE_ID=\"your.email@example.com\""
+  echo "  export APPLE_ID=<your-apple-developer-email>"
   exit 1
 fi
 log_success "APPLE_ID set: $APPLE_ID"
@@ -110,7 +110,7 @@ if [ -z "${APPLE_TEAM_ID:-}" ]; then
   echo "  Apple Developer account > Settings > Team ID (10-character code)"
   echo ""
   echo "Set it with:"
-  echo "  export APPLE_TEAM_ID=\"ABC123DEFG\""
+  echo "  export APPLE_TEAM_ID=<your-10-char-team-id>"
   exit 1
 fi
 log_success "APPLE_TEAM_ID set: $APPLE_TEAM_ID"
@@ -141,10 +141,10 @@ if [ -z "${APPLE_PASSWORD:-}" ]; then
   echo "  3. Navigate to 'Sign in and security' > 'App passwords'"
   echo "  4. Generate new password for 'SideQuest Notarization'"
   echo "  5. Copy password and set environment variable:"
-  echo "     export APPLE_PASSWORD=\"abcd-efgh-ijkl-mnop\""
+  echo "     export APPLE_PASSWORD=<your-app-specific-password>"
   echo ""
   echo "Or save password to Keychain (one-time setup):"
-  echo "  security add-generic-password -s 'apple-notarization' -a '$APPLE_ID' -w 'your-password'"
+  echo "  security add-generic-password -s 'apple-notarization' -a '\$APPLE_ID' -w <your-password>"
   exit 1
 fi
 
