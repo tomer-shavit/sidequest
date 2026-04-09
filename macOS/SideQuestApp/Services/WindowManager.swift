@@ -32,14 +32,35 @@ class WindowManager: NSObject {
 
     // MARK: - Private Implementation
 
+    private func getActiveScreen() -> NSScreen {
+        // Detect which monitor the developer is actively using
+
+        // Method 1: Use main screen (most reliable for development)
+        if let main = NSScreen.main {
+            if let description = main.localizedName {
+                ErrorHandler.logInfo("Quest will display on: \(description)")
+            }
+            return main
+        }
+
+        // Method 2: Fallback to primary screen (if main is nil)
+        if let primary = NSScreen.screens.first {
+            return primary
+        }
+
+        // Method 3: Last resort (should not happen)
+        return NSScreen()
+    }
+
     private func displayQuest(_ questData: QuestData) {
         do {
             // Position: top-right, just below system notification area
-            let mainScreen = NSScreen.main ?? NSScreen.screens.first!
-            let screenFrame = mainScreen.visibleFrame
+            // Detect which monitor the developer is actively using
+            let activeScreen = getActiveScreen()
+            let screenFrame = activeScreen.visibleFrame
 
-            let x = screenFrame.maxX - 420  // 400pt wide + 20pt margin
-            let y = screenFrame.maxY - 100   // Just below system notifications (starts from top)
+            let x = screenFrame.maxX - 420  // 400pt wide + 20pt margin (on active screen)
+            let y = screenFrame.maxY - 100   // Just below system notifications (on active screen)
 
             let frame = NSRect(x: x, y: y, width: 400, height: 250)
 
