@@ -11,6 +11,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Set app as background-only (no dock icon)
             NSApp.setActivationPolicy(.accessory)
 
+            // Register for auto-launch on login (one-time check)
+            if !LaunchAtLoginManager.shared.isEnabled() {
+                LaunchAtLoginManager.shared.registerForLoginItems()
+            }
+
             // Initialize API client with hardcoded values for now
             // (will be replaced with user auth flow in Phase 2)
             let apiBase = "https://bd5x085yt3.execute-api.us-east-1.amazonaws.com"
