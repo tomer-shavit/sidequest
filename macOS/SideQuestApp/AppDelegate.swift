@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var apiClient: APIClient?
@@ -12,6 +13,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set app as accessory (menu bar only, no dock icon)
         NSApp.setActivationPolicy(.accessory)
+
+        // Log Accessibility status (needed for global keyboard shortcuts)
+        // Don't prompt — permission is tied to code signature, breaks on dev rebuilds
+        if !AXIsProcessTrusted() {
+            ErrorHandler.logInfo("Accessibility not granted — global keyboard shortcuts disabled. Local shortcuts work after clicking notification.")
+        }
 
         // Register for auto-launch on login (one-time check)
         if !LaunchAtLoginManager.shared.isEnabled() {

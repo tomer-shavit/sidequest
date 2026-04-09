@@ -8,11 +8,8 @@
 
 INPUT=$(cat)
 
-# Prevent re-fire: if active-quest.json exists, we already showed a quest this turn
+# Active quest tracking (re-fire guard disabled for testing)
 ACTIVE_FILE="${CLAUDE_PLUGIN_DATA}/active-quest.json"
-if [ -f "$ACTIVE_FILE" ]; then
-  exit 0
-fi
 
 # Check for config file with auth token
 CONFIG_FILE="${CLAUDE_PLUGIN_DATA}/config.json"
@@ -20,10 +17,18 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 0
 fi
 
-# Read config
-TOKEN=$(grep -o '"token":\s*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/"token":\s*"//' | sed 's/"$//')
-ENABLED=$(grep -o '"enabled":\s*\(true\|false\)' "$CONFIG_FILE" | head -1 | sed 's/"enabled":\s*//')
-API_BASE=$(grep -o '"api_base":\s*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/"api_base":\s*"//' | sed 's/"$//')
+# Read config (use python3 for reliable JSON parsing)
+eval "$(python3 -c "
+import json, shlex, sys
+try:
+    with open(sys.argv[1]) as f:
+        c = json.load(f)
+    print(f'TOKEN={shlex.quote(str(c.get(\"token\",\"\")))}')
+    print(f'ENABLED={shlex.quote(str(c.get(\"enabled\",True)).lower())}')
+    print(f'API_BASE={shlex.quote(str(c.get(\"api_base\",\"\")))}')
+    print(f'ROUND_ROBIN={c.get(\"round_robin\",0)}')
+except: pass
+" "$CONFIG_FILE" 2>/dev/null)"
 
 if [ -z "$TOKEN" ]; then
   exit 0
@@ -35,7 +40,6 @@ fi
 
 # Local round-robin counter (for testing: show quest every N messages)
 COUNTER_FILE="${CLAUDE_PLUGIN_DATA}/counter"
-ROUND_ROBIN=$(grep -o '"round_robin":\s*[0-9]*' "$CONFIG_FILE" | head -1 | sed 's/"round_robin":\s*//')
 
 if [ -n "$ROUND_ROBIN" ] && [ "$ROUND_ROBIN" -gt 0 ] 2>/dev/null; then
   # Local round-robin mode: skip server frequency, use local counter
@@ -64,13 +68,16 @@ if [ -z "$RESPONSE" ] || [ "$RESPONSE" = "{}" ]; then
   exit 0
 fi
 
-# Extract quest fields
-DISPLAY_TEXT=$(echo "$RESPONSE" | grep -o '"display_text":\s*"[^"]*"' | head -1 | sed 's/"display_text":\s*"//' | sed 's/"$//')
-TRACKING_URL=$(echo "$RESPONSE" | grep -o '"tracking_url":\s*"[^"]*"' | head -1 | sed 's/"tracking_url":\s*"//' | sed 's/"$//')
-QUEST_ID=$(echo "$RESPONSE" | grep -o '"quest_id":\s*"[^"]*"' | head -1 | sed 's/"quest_id":\s*"//' | sed 's/"$//')
-TRACKING_ID=$(echo "$RESPONSE" | grep -o '"tracking_id":\s*"[^"]*"' | head -1 | sed 's/"tracking_id":\s*"//' | sed 's/"$//')
-SPONSOR_NAME=$(echo "$RESPONSE" | grep -o '"sponsor_name":\s*"[^"]*"' | head -1 | sed 's/"sponsor_name":\s*"//' | sed 's/"$//')
-SPONSOR_TAGLINE=$(echo "$RESPONSE" | grep -o '"sponsor_tagline":\s*"[^"]*"' | head -1 | sed 's/"sponsor_tagline":\s*"//' | sed 's/"$//')
+# Extract quest fields (use python3 for reliable JSON parsing)
+eval "$(echo "$RESPONSE" | python3 -c "
+import json, shlex, sys
+try:
+    r = json.load(sys.stdin)
+    for k in ('display_text','subtitle','tracking_url','quest_id','reward_amount','brand_name','category'):
+        v = r.get(k, '')
+        print(f'{k.upper()}={shlex.quote(str(v))}')
+except: pass
+" 2>/dev/null)"
 
 if [ -z "$DISPLAY_TEXT" ] || [ -z "$TRACKING_URL" ]; then
   exit 0
@@ -78,11 +85,17 @@ fi
 
 # Save active quest for the intercept hook (also prevents re-fire)
 cat > "$ACTIVE_FILE" 2>/dev/null << QUESTJSON
-{"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","tracking_url":"${TRACKING_URL}","sponsor_name":"${SPONSOR_NAME}","sponsor_tagline":"${SPONSOR_TAGLINE}"}
+{"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","subtitle":"${SUBTITLE}","tracking_url":"${TRACKING_URL}","reward_amount":${REWARD_AMOUNT:-250},"brand_name":"${BRAND_NAME:-Unknown}","category":"${CATEGORY:-DevTool}"}
 QUESTJSON
+
+# Save last quest for retrigger skill (use ~/.sidequest/ so skills can find it)
+mkdir -p "$HOME/.sidequest" 2>/dev/null
+cat > "$HOME/.sidequest/last-quest.json" 2>/dev/null << LASTJSON
+{"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","subtitle":"${SUBTITLE}","tracking_url":"${TRACKING_URL}","reward_amount":${REWARD_AMOUNT:-250},"brand_name":"${BRAND_NAME:-Unknown}","category":"${CATEGORY:-DevTool}"}
+LASTJSON
 
 # IPC trigger to native app (sends full quest data)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-"${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "${TRACKING_ID:-$QUEST_ID}" "$DISPLAY_TEXT" "$TRACKING_URL" "250" "${SPONSOR_NAME:-Unknown}" "DevTool" 2>/dev/null || true
+"${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "$QUEST_ID" "$DISPLAY_TEXT" "$SUBTITLE" "$TRACKING_URL" "${REWARD_AMOUNT:-250}" "${BRAND_NAME:-Unknown}" "${CATEGORY:-DevTool}" 2>/dev/null || true
 
 exit 0

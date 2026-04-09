@@ -1,16 +1,83 @@
 import AppKit
 import SwiftUI
 
+// NSPanel — .nonactivatingPanel lets clicks work without activating the app
+class FloatingPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+// NSHostingView subclass: accepts first-mouse clicks + NSTrackingArea for hover
+class HoverTrackingHostingView<Content: View>: NSHostingView<Content> {
+    var onHoverChanged: ((Bool) -> Void)?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        NSCursor.pointingHand.push()
+        onHoverChanged?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        NSCursor.pop()
+        onHoverChanged?(false)
+    }
+}
+
+// Shared hover state — bridges NSView hover detection to SwiftUI progress bar
+class QuestHoverState: ObservableObject {
+    @Published var isHovered = false
+}
+
+
 @MainActor
 class WindowManager: NSObject {
     private var notificationWindow: NSWindow?
     private var dismissTimer: Timer?
     private var apiClient: APIClient?
     private var eventQueue: EventQueue?
-    private var questQueue: [QuestData] = []
     private var displayStartTime: Date?
     private var currentQuest: QuestData?
     private var userId: String = "unknown"
+    private var globalKeyMonitor: Any?
+    private var localKeyMonitor: Any?
+    private var dismissRemainingTime: TimeInterval = 0
+    private var timerStartDate: Date?
+    private var hoverState = QuestHoverState()
+
+    private static let debugLog = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".sidequest/debug.log")
+
+    private static func debug(_ msg: String) {
+        let line = "\(Date()): \(msg)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: debugLog.path) {
+                if let handle = try? FileHandle(forWritingTo: debugLog) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? FileManager.default.createDirectory(at: debugLog.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? data.write(to: debugLog)
+            }
+        }
+    }
 
     override init() {
         super.init()
@@ -19,6 +86,14 @@ class WindowManager: NSObject {
     deinit {
         dismissTimer?.invalidate()
         dismissTimer = nil
+        if let monitor = globalKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalKeyMonitor = nil
+        }
+        if let monitor = localKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            localKeyMonitor = nil
+        }
     }
 
     func setAPIClient(_ client: APIClient) {
@@ -36,10 +111,8 @@ class WindowManager: NSObject {
     // MARK: - Public Interface
 
     func showQuest(_ questData: QuestData) {
+        // Drop if a notification is already showing — no queuing
         if notificationWindow != nil {
-            if questQueue.count < 3 {
-                questQueue.append(questData)
-            }
             return
         }
 
@@ -62,42 +135,71 @@ class WindowManager: NSObject {
         let activeScreen = getActiveScreen()
         let screenFrame = activeScreen.visibleFrame
 
-        let x = screenFrame.maxX - 390
-        let y = screenFrame.maxY - 100
+        let cardWidth: CGFloat = QuestCardView.cardWidth
+        let dismissSeconds = 8.0
 
-        let frame = NSRect(x: x, y: y, width: 370, height: 110)
+        // Reset hover state BEFORE creating the view so both share the same instance
+        hoverState = QuestHoverState()
 
-        let window = NSWindow(
+        let contentView = NotificationWindowView(
+            questData: questData,
+            onOpen: { [weak self] in self?.handleOpen(questData) },
+            onSave: { [weak self] in self?.handleSave(questData) },
+            onDismiss: { [weak self] in self?.handleDismiss() },
+            hoverState: hoverState,
+            dismissDuration: dismissSeconds
+        )
+
+        // Create hosting view with hover tracking via NSTrackingArea
+        let hostingView = HoverTrackingHostingView(rootView: contentView)
+        hostingView.onHoverChanged = { [weak self] hovering in
+            self?.hoverState.isHovered = hovering
+            self?.handleHover(hovering)
+        }
+        let fittingSize = hostingView.fittingSize
+        let cardHeight = fittingSize.height
+
+        // Position: flush right, well below macOS notification area
+        let x = screenFrame.maxX - cardWidth
+        let y = screenFrame.maxY - cardHeight - 150
+        let frame = NSRect(x: x, y: y, width: cardWidth, height: cardHeight)
+
+        // NSPanel with .nonactivatingPanel — clicks work without app activation
+        let window = FloatingPanel(
             contentRect: frame,
-            styleMask: [.borderless],
+            styleMask: [.nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
 
         window.level = .floating
+        window.isFloatingPanel = true
+        window.hidesOnDeactivate = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.collectionBehavior = [.transient, .ignoresCycle]
         window.isMovableByWindowBackground = false
+        window.acceptsMouseMovedEvents = true
 
-        let dismissSeconds = 8.0
-        let contentView = NotificationWindowView(
-            questData: questData,
-            onOpen: { [weak self] in self?.handleOpen(questData) },
-            onDismiss: { [weak self] in self?.handleDismiss() },
-            dismissDuration: dismissSeconds
-        )
+        hostingView.frame = NSRect(x: 0, y: 0, width: cardWidth, height: cardHeight)
+        window.contentView = hostingView
 
-        window.contentView = NSHostingView(rootView: contentView)
+        // Lock window to computed size — prevents NSHostingView from resizing
+        window.setFrame(frame, display: false)
+        window.contentMinSize = NSSize(width: cardWidth, height: cardHeight)
+        window.contentMaxSize = NSSize(width: cardWidth, height: cardHeight)
 
         self.notificationWindow = window
         self.displayStartTime = Date()
         self.currentQuest = questData
 
-        animateIn(window)
+        installKeyMonitor(questData: questData)
+        animateIn(window, to: frame)
 
         // Auto-dismiss after 8 seconds
-        dismissTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
+        dismissRemainingTime = dismissSeconds
+        timerStartDate = Date()
+        dismissTimer = Timer.scheduledTimer(withTimeInterval: dismissSeconds, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.handleDismiss()
             }
@@ -123,8 +225,65 @@ class WindowManager: NSObject {
         }
     }
 
+    // MARK: - Global Keyboard Shortcuts
+
+    private func installKeyMonitor(questData: QuestData) {
+        removeKeyMonitor()
+
+        let trusted = AXIsProcessTrusted()
+        WindowManager.debug("installKeyMonitor — AXIsProcessTrusted: \(trusted)")
+
+        let handler: (NSEvent) -> Void = { [weak self] event in
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            WindowManager.debug("Key event: flags=\(flags.rawValue) key='\(key)'")
+
+            let isCmdCtrl = flags.contains(.command) && flags.contains(.control)
+            guard isCmdCtrl else { return }
+
+            WindowManager.debug("Matched ⌘⌃ + '\(key)'")
+
+            Task { @MainActor in
+                guard self?.notificationWindow != nil else { return }
+                switch key {
+                case "o":
+                    self?.handleOpen(questData)
+                case "s":
+                    self?.handleSave(questData)
+                case "d":
+                    self?.handleDismiss()
+                default:
+                    break
+                }
+            }
+        }
+
+        // Global monitor — works from any app (needs Accessibility permission)
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: handler)
+
+        // Local monitor — works when notification window is focused (no permission needed)
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            handler(event)
+            return event
+        }
+
+        WindowManager.debug("Monitors installed: global=\(globalKeyMonitor != nil) local=\(localKeyMonitor != nil)")
+    }
+
+    private func removeKeyMonitor() {
+        if let monitor = globalKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalKeyMonitor = nil
+        }
+        if let monitor = localKeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            localKeyMonitor = nil
+        }
+    }
+
+    // MARK: - Tracking ID
+
     private func deriveTrackingId(from questData: QuestData) -> String {
-        // Extract tracking_id from tracking_url: e.g. https://api.trysidequest.ai/click/abc123 -> abc123
         if let lastSlash = questData.tracking_url.lastIndex(of: "/") {
             let id = String(questData.tracking_url[questData.tracking_url.index(after: lastSlash)...])
             if !id.isEmpty { return id }
@@ -132,27 +291,50 @@ class WindowManager: NSObject {
         return questData.quest_id
     }
 
-    private func animateIn(_ window: NSWindow) {
-        var frame = window.frame
-        frame.origin.x = getActiveScreen().visibleFrame.maxX
-        window.setFrame(frame, display: false)
+    // MARK: - Animation
+
+    private func animateIn(_ window: NSWindow, to targetFrame: NSRect) {
+        var startFrame = targetFrame
+        startFrame.origin.x = getActiveScreen().visibleFrame.maxX
+        window.setFrame(startFrame, display: false)
 
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.3
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-
-            window.animator().setFrame(
-                NSRect(x: window.frame.origin.x - (window.frame.width + 20),
-                       y: window.frame.origin.y,
-                       width: window.frame.width,
-                       height: window.frame.height),
-                display: true
-            )
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().setFrame(targetFrame, display: true)
         })
     }
 
+    // MARK: - Hover Pause/Resume
+
+    private func handleHover(_ hovering: Bool) {
+        if hovering {
+            // Pause: record remaining time and invalidate timer
+            if let start = timerStartDate {
+                let elapsed = Date().timeIntervalSince(start)
+                dismissRemainingTime = max(0, dismissRemainingTime - elapsed)
+            }
+            dismissTimer?.invalidate()
+            dismissTimer = nil
+            timerStartDate = nil
+        } else {
+            // Resume: schedule new timer with remaining time
+            guard dismissRemainingTime > 0 else {
+                handleDismiss()
+                return
+            }
+            timerStartDate = Date()
+            dismissTimer = Timer.scheduledTimer(withTimeInterval: dismissRemainingTime, repeats: false) { [weak self] _ in
+                Task { @MainActor in
+                    self?.handleDismiss()
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
     private func handleOpen(_ questData: QuestData) {
-        // Log quest_clicked event
         let trackingId = deriveTrackingId(from: questData)
         let capturedUserId = userId
         Task {
@@ -163,12 +345,12 @@ class WindowManager: NSObject {
                 trackingId: trackingId,
                 eventType: "quest_clicked",
                 metadata: [
-                    "time_to_click_ms": .double(timeToClick)
+                    "time_to_click_ms": .double(timeToClick),
+                    "source": .string("keyboard")
                 ]
             )
         }
 
-        // Open landing page — validate https scheme
         if let url = URL(string: questData.tracking_url),
            let scheme = url.scheme?.lowercased(),
            scheme == "https" || scheme == "http" {
@@ -178,16 +360,67 @@ class WindowManager: NSObject {
         handleDismiss()
     }
 
+    private func handleSave(_ questData: QuestData) {
+        let trackingId = deriveTrackingId(from: questData)
+        let capturedUserId = userId
+        Task {
+            await self.eventQueue?.addEvent(
+                userId: capturedUserId,
+                questId: questData.quest_id,
+                trackingId: trackingId,
+                eventType: "quest_saved",
+                metadata: [
+                    "source": .string("keyboard")
+                ]
+            )
+        }
+
+        // Persist to saved quests file
+        saveToDisk(questData)
+
+        handleDismiss()
+    }
+
+    private func saveToDisk(_ questData: QuestData) {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".sidequest")
+        let file = dir.appendingPathComponent("saved-quests.json")
+
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            var saved: [[String: String]] = []
+            if let data = try? Data(contentsOf: file),
+               let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
+                saved = existing
+            }
+
+            saved.append([
+                "quest_id": questData.quest_id,
+                "display_text": questData.display_text,
+                "subtitle": questData.subtitle,
+                "tracking_url": questData.tracking_url,
+                "brand_name": questData.brand_name,
+                "category": questData.category,
+                "saved_at": ISO8601DateFormatter().string(from: Date())
+            ])
+
+            let json = try JSONSerialization.data(withJSONObject: saved, options: .prettyPrinted)
+            try json.write(to: file)
+        } catch {
+            // Silent failure — never break the user's flow
+        }
+    }
+
     private func handleDismiss() {
         dismissTimer?.invalidate()
         dismissTimer = nil
+        removeKeyMonitor()
 
         guard let window = notificationWindow else { return }
 
-        // Immediately prevent re-entry
         self.notificationWindow = nil
 
-        // Capture values before clearing state
         let capturedDisplayStart = self.displayStartTime
         let quest = currentQuest
         let trackingId = quest.map { deriveTrackingId(from: $0) } ?? "unknown"
@@ -197,7 +430,6 @@ class WindowManager: NSObject {
         self.displayStartTime = nil
         self.currentQuest = nil
 
-        // Log quest_dismissed event
         Task {
             let displayDuration = capturedDisplayStart.map { Date().timeIntervalSince($0) * 1000 } ?? 0
             await self.eventQueue?.addEvent(
@@ -211,22 +443,23 @@ class WindowManager: NSObject {
             )
         }
 
-        // Hide window. Do NOT nil contentView or close() here — let ARC
-        // deallocate window + hosting view together in the next run loop
-        // iteration to avoid use-after-free during autorelease pool drain.
-        window.orderOut(nil)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
 
-        // Defer cleanup to next run loop pass so the current autorelease
-        // pool drains without referencing the freed hosting view.
-        DispatchQueue.main.async { [weak self] in
-            // `window` goes out of scope here — ARC releases it and its
-            // contentView (NSHostingView) in a clean autorelease context.
-            _ = window
+            window.animator().setFrame(
+                NSRect(x: getActiveScreen().visibleFrame.maxX,
+                       y: window.frame.origin.y,
+                       width: window.frame.width,
+                       height: window.frame.height),
+                display: true
+            )
+        }, completionHandler: {
+            window.orderOut(nil)
 
-            if let nextQuest = self?.questQueue.first {
-                self?.questQueue.removeFirst()
-                self?.displayQuest(nextQuest)
+            DispatchQueue.main.async {
+                _ = window
             }
-        }
+        })
     }
 }

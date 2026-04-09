@@ -134,6 +134,7 @@ class IPCListener {
                     let quest = QuestData(
                         quest_id: questId,
                         display_text: displayText,
+                        subtitle: json["subtitle"] as? String ?? "",
                         tracking_url: trackingUrl,
                         reward_amount: json["reward_amount"] as? Int ?? 250,
                         brand_name: json["brand_name"] as? String ?? "Unknown",
