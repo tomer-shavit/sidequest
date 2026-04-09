@@ -68,6 +68,7 @@ fi
 DISPLAY_TEXT=$(echo "$RESPONSE" | grep -o '"display_text":\s*"[^"]*"' | head -1 | sed 's/"display_text":\s*"//' | sed 's/"$//')
 TRACKING_URL=$(echo "$RESPONSE" | grep -o '"tracking_url":\s*"[^"]*"' | head -1 | sed 's/"tracking_url":\s*"//' | sed 's/"$//')
 QUEST_ID=$(echo "$RESPONSE" | grep -o '"quest_id":\s*"[^"]*"' | head -1 | sed 's/"quest_id":\s*"//' | sed 's/"$//')
+TRACKING_ID=$(echo "$RESPONSE" | grep -o '"tracking_id":\s*"[^"]*"' | head -1 | sed 's/"tracking_id":\s*"//' | sed 's/"$//')
 SPONSOR_NAME=$(echo "$RESPONSE" | grep -o '"sponsor_name":\s*"[^"]*"' | head -1 | sed 's/"sponsor_name":\s*"//' | sed 's/"$//')
 SPONSOR_TAGLINE=$(echo "$RESPONSE" | grep -o '"sponsor_tagline":\s*"[^"]*"' | head -1 | sed 's/"sponsor_tagline":\s*"//' | sed 's/"$//')
 
@@ -80,8 +81,13 @@ cat > "$ACTIVE_FILE" 2>/dev/null << QUESTJSON
 {"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","tracking_url":"${TRACKING_URL}","sponsor_name":"${SPONSOR_NAME}","sponsor_tagline":"${SPONSOR_TAGLINE}"}
 QUESTJSON
 
-# Generate scroll card and output hook JSON via Python
+# IPC trigger to native app (Phase 2 integration)
+# Send trigger message with questId and trackingId (if available)
+# App will display quest natively if running; silently ignored if app not running
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "${TRACKING_ID:-$QUEST_ID}" 2>/dev/null || true
+
+# Generate scroll card and output hook JSON via Python
 SPONSOR_ARGS=""
 if [ -n "$SPONSOR_NAME" ]; then
   SPONSOR_ARGS="--sponsor \"$SPONSOR_NAME\""
