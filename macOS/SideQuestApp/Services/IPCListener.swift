@@ -1,144 +1,162 @@
 import Foundation
-import Network
-import os.log
 
 class IPCListener {
-    private var listener: NWListener?
-    private let socketPath: String = "/tmp/sidequest.sock"
+    private var socketFD: Int32 = -1
+    private var isRunning = false
+    private var listenThread: Thread?
+    private let socketPath: String
     var onTriggerReceived: ((String, String) -> Void)?
+    var onQuestReceived: ((QuestData) -> Void)?
 
-    // MARK: - Public Interface
+    init() {
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let sideQuestDir = homeDir.appendingPathComponent(".sidequest")
+
+        if !FileManager.default.fileExists(atPath: sideQuestDir.path) {
+            try? FileManager.default.createDirectory(at: sideQuestDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        }
+
+        self.socketPath = sideQuestDir.appendingPathComponent("sidequest.sock").path
+    }
 
     func startListening() throws {
-        // Remove stale socket file if it exists
-        ErrorHandler.logInfo("Removing stale socket at \(socketPath)")
-        do {
+        // Remove stale socket
+        if FileManager.default.fileExists(atPath: socketPath) {
             try FileManager.default.removeItem(atPath: socketPath)
-        } catch {
-            // Socket may not exist; that's fine
-            ErrorHandler.logInfo("Stale socket already cleaned up")
         }
 
-        // Create NWListener with Unix domain socket parameters
-        let parameters = NWParameters.unix
-        let listener = try NWListener(using: parameters)
-
-        // Set state update handler for debugging
-        listener.stateUpdateHandler = { [weak self] state in
-            self?.logListenerState(state)
+        // Create Unix domain socket
+        socketFD = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard socketFD >= 0 else {
+            throw NSError(domain: "IPCListener", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create socket"])
         }
 
-        // Set handler for new incoming connections
-        listener.newConnectionHandler = { [weak self] connection in
-            self?.handleConnection(connection)
+        // Bind to path
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+
+        let pathBytes = socketPath.utf8CString
+        guard pathBytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
+            close(socketFD)
+            throw NSError(domain: "IPCListener", code: 2, userInfo: [NSLocalizedDescriptionKey: "Socket path too long"])
         }
 
-        // Start listening on Unix domain socket
-        try listener.start(on: .unix(path: socketPath))
+        withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { dest in
+                for i in 0..<pathBytes.count {
+                    dest[i] = pathBytes[i]
+                }
+            }
+        }
 
-        self.listener = listener
-        ErrorHandler.logInfo("IPC listener started at \(self.socketPath)")
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                bind(socketFD, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+
+        guard bindResult == 0 else {
+            close(socketFD)
+            throw NSError(domain: "IPCListener", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to bind: \(String(cString: strerror(errno)))"])
+        }
+
+        // Set permissions to 0600
+        chmod(socketPath, 0o600)
+
+        // Listen with backlog of 5
+        guard listen(socketFD, 5) == 0 else {
+            close(socketFD)
+            throw NSError(domain: "IPCListener", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to listen"])
+        }
+
+        // Accept connections on background thread
+        isRunning = true
+        listenThread = Thread { [weak self] in
+            self?.acceptLoop()
+        }
+        listenThread?.name = "SideQuest-IPC"
+        listenThread?.start()
+
+        ErrorHandler.logInfo("IPC listener started at \(socketPath)")
     }
 
     func stopListening() {
-        ErrorHandler.logInfo("Stopping IPC listener")
-        listener?.cancel()
-        listener = nil
-
-        // Clean up socket file
-        try? FileManager.default.removeItem(atPath: socketPath)
-        ErrorHandler.logInfo("IPC socket cleaned up at \(socketPath)")
-    }
-
-    // MARK: - Private Implementation
-
-    private func handleConnection(_ connection: NWConnection) {
-        ErrorHandler.logInfo("IPC connection established")
-
-        // Set state update handler for this connection
-        connection.stateUpdateHandler = { [weak self] state in
-            self?.logConnectionState(state, connection: connection)
+        isRunning = false
+        if socketFD >= 0 {
+            close(socketFD)
+            socketFD = -1
         }
-
-        // Set up to receive data when connection is ready
-        connection.start(queue: .global())
-
-        // Receive data
-        receiveData(from: connection)
+        try? FileManager.default.removeItem(atPath: socketPath)
+        ErrorHandler.logInfo("IPC socket cleaned up")
     }
 
-    private func receiveData(from connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 1024) { [weak self] data, context, isComplete, error in
-            // Handle error
-            if let error = error {
-                ErrorHandler.logNetworkError(error, endpoint: "/tmp/sidequest.sock")
-                connection.cancel()
-                return
+    // MARK: - Private
+
+    private func acceptLoop() {
+        while isRunning {
+            var clientAddr = sockaddr_un()
+            var clientLen = socklen_t(MemoryLayout<sockaddr_un>.size)
+
+            let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
+                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                    accept(socketFD, sockaddrPtr, &clientLen)
+                }
             }
 
-            // Process received data
-            if let data = data, !data.isEmpty {
-                ErrorHandler.logInfo("IPC data received: \(data.count) bytes")
-                self?.processReceivedData(data)
+            guard clientFD >= 0 else {
+                if isRunning {
+                    ErrorHandler.logInfo("IPC accept failed: \(String(cString: strerror(errno)))")
+                }
+                continue
             }
 
-            // Close connection
-            connection.cancel()
+            // Read data from client (max 1024 bytes, fire-and-forget)
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            let bytesRead = read(clientFD, &buffer, buffer.count)
+            close(clientFD)
+
+            if bytesRead > 0 {
+                let data = Data(buffer[0..<bytesRead])
+                processReceivedData(data)
+            }
         }
     }
 
     private func processReceivedData(_ data: Data) {
         do {
-            // Try to decode JSON: { "questId": "...", "trackingId": "..." }
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: String] {
-                let questId = json["questId"] ?? ""
-                let trackingId = json["trackingId"] ?? ""
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let questId = json["questId"] as? String ?? ""
 
-                // Validate both fields are non-empty
-                if !questId.isEmpty && !trackingId.isEmpty {
-                    ErrorHandler.logInfo("IPC trigger received: questId=\(questId), trackingId=\(trackingId)")
-                    onTriggerReceived?(questId, trackingId)
-                    ErrorHandler.logInfo("IPC callback invoked; quest trigger queued")
+                // Check if full quest data is present
+                if let displayText = json["display_text"] as? String,
+                   let trackingUrl = json["tracking_url"] as? String,
+                   !displayText.isEmpty {
+                    let quest = QuestData(
+                        quest_id: questId,
+                        display_text: displayText,
+                        tracking_url: trackingUrl,
+                        reward_amount: json["reward_amount"] as? Int ?? 250,
+                        brand_name: json["brand_name"] as? String ?? "Unknown",
+                        category: json["category"] as? String ?? "DevTool"
+                    )
+                    ErrorHandler.logInfo("IPC full quest received: \(questId)")
+                    // Dispatch to main queue — this method runs on the IPC background thread
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onQuestReceived?(quest)
+                    }
                 } else {
-                    ErrorHandler.logInfo("IPC trigger missing required fields")
+                    // Fallback: just IDs, need API fetch
+                    let trackingId = json["trackingId"] as? String ?? ""
+                    if !questId.isEmpty && !trackingId.isEmpty {
+                        ErrorHandler.logInfo("IPC trigger: questId=\(questId)")
+                        DispatchQueue.main.async { [weak self] in
+                            self?.onTriggerReceived?(questId, trackingId)
+                        }
+                    }
                 }
-            } else {
-                ErrorHandler.logInfo("IPC message is not valid JSON")
             }
         } catch {
             ErrorHandler.logInfo("IPC JSON parse failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func logListenerState(_ state: NWListener.State) {
-        switch state {
-        case .ready:
-            ErrorHandler.logInfo("IPC listener ready")
-        case .failed(let error):
-            ErrorHandler.logNetworkError(error, endpoint: socketPath)
-        case .cancelled:
-            ErrorHandler.logInfo("IPC listener cancelled")
-        case .waiting(let error):
-            ErrorHandler.logInfo("IPC listener waiting: \(error.localizedDescription)")
-        @unknown default:
-            ErrorHandler.logInfo("IPC listener state: unknown")
-        }
-    }
-
-    private func logConnectionState(_ state: NWConnection.State, connection: NWConnection) {
-        switch state {
-        case .ready:
-            ErrorHandler.logInfo("IPC connection state: ready")
-        case .failed(let error):
-            ErrorHandler.logNetworkError(error, endpoint: socketPath)
-        case .cancelled:
-            ErrorHandler.logInfo("IPC connection state: cancelled")
-        case .waiting(let error):
-            ErrorHandler.logInfo("IPC connection state: waiting - \(error.localizedDescription)")
-        case .preparing:
-            ErrorHandler.logInfo("IPC connection state: preparing")
-        @unknown default:
-            ErrorHandler.logInfo("IPC connection state: unknown")
         }
     }
 }

@@ -5,12 +5,11 @@ struct MenuContentView: View {
 
     @State private var isEnabled = true
     @State private var historyEvents: [QuestEvent] = []
-    @State private var showHistory = false
     @State private var isPaused = false
     @State private var pauseEndTime: Date?
 
-    var eventQueue: EventQueue? = nil
-    var stateManager: StateManager? = nil
+    var eventQueue: EventQueue?
+    var stateManager: StateManager?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,9 +19,15 @@ struct MenuContentView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
 
-                Text("Running")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                if isPaused, let endTime = pauseEndTime {
+                    Text("Paused until \(formatTime(endTime))")
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange)
+                } else {
+                    Text("Running")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -44,24 +49,27 @@ struct MenuContentView: View {
 
             Divider()
 
-            // Recent history section (if events exist)
+            // Recent history section
             if !historyEvents.isEmpty {
                 VStack(spacing: 4) {
                     Text("Recent")
                         .font(.system(size: 11, weight: .semibold))
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    List(historyEvents.prefix(5), id: \.eventId) { event in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(event.eventType)
-                                .font(.system(size: 11, weight: .medium))
-                            Text(formatTimestamp(event.timestamp))
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
+                    ForEach(historyEvents.prefix(5), id: \.eventId) { event in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.questId == "unknown" ? event.eventType : event.questId)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .lineLimit(1)
+                                Text("\(event.eventType) \(formatTimestamp(event.timestamp))")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
                         }
+                        .padding(.vertical, 2)
                     }
-                    .frame(height: 150)
-                    .listStyle(.plain)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -74,12 +82,13 @@ struct MenuContentView: View {
                 Menu {
                     Button("1 hour") { pauseFor(hours: 1) }
                     Button("4 hours") { pauseFor(hours: 4) }
+                    Button("8 hours") { pauseFor(hours: 8) }
                     Button("Until tomorrow") { pauseUntilTomorrow() }
                 } label: {
                     HStack {
                         Image(systemName: "pause.circle")
                             .frame(width: 16)
-                        Text("Pause")
+                        Text(isPaused ? "Paused" : "Pause")
                     }
                     .font(.system(size: 13))
                 }
@@ -92,16 +101,17 @@ struct MenuContentView: View {
 
             Divider()
 
-            // Settings button
+            // Test quest button (for development)
             HStack {
                 Button(action: {
-                    // Settings action (future: open preferences window)
-                    NSLog("Settings clicked")
+                    if let appDelegate = NSApp.delegate as? AppDelegate {
+                        appDelegate.showTestQuest()
+                    }
                 }) {
                     HStack {
-                        Image(systemName: "gear")
+                        Image(systemName: "sparkles")
                             .frame(width: 16)
-                        Text("Settings")
+                        Text("Show Test Quest")
                     }
                     .font(.system(size: 13))
                 }
@@ -111,6 +121,8 @@ struct MenuContentView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+
+            Divider()
 
             // Quit button
             HStack {
@@ -157,6 +169,13 @@ struct MenuContentView: View {
         return formatter.string(from: date)
     }
 
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
+    }
+
     private func pauseFor(hours: Int) {
         let minutes = hours * 60
         pauseFor(minutes: minutes)
@@ -171,25 +190,33 @@ struct MenuContentView: View {
 
     private func pauseFor(minutes: Int) {
         Task {
-            // Temporarily disable quests
             await stateManager?.setUserEnabled(false)
-            isPaused = true
-            pauseEndTime = Date().addingTimeInterval(TimeInterval(minutes * 60))
-
-            // Re-enable after delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + TimeInterval(minutes * 60)) {
-                Task {
-                    await stateManager?.setUserEnabled(true)
-                    isPaused = false
-                    pauseEndTime = nil
-                }
+            await MainActor.run {
+                isPaused = true
+                pauseEndTime = Date().addingTimeInterval(TimeInterval(minutes * 60))
             }
 
-            ErrorHandler.logInfo("Quests paused for \(minutes) minutes")
+            // Re-enable after delay
+            try? await Task.sleep(nanoseconds: UInt64(minutes) * 60 * 1_000_000_000)
+
+            await stateManager?.setUserEnabled(true)
+            await MainActor.run {
+                isPaused = false
+                pauseEndTime = nil
+                isEnabled = true
+            }
+
+            ErrorHandler.logInfo("Quests resumed after \(minutes) minute pause")
         }
+
+        ErrorHandler.logInfo("Quests paused for \(minutes) minutes")
     }
 }
 
-#Preview {
-    MenuContentView()
+#if DEBUG
+struct MenuContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        MenuContentView()
+    }
 }
+#endif

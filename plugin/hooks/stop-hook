@@ -81,18 +81,8 @@ cat > "$ACTIVE_FILE" 2>/dev/null << QUESTJSON
 {"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","tracking_url":"${TRACKING_URL}","sponsor_name":"${SPONSOR_NAME}","sponsor_tagline":"${SPONSOR_TAGLINE}"}
 QUESTJSON
 
-# IPC trigger to native app (Phase 2 integration)
-# Send trigger message with questId and trackingId (if available)
-# App will display quest natively if running; silently ignored if app not running
+# IPC trigger to native app (sends full quest data)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-"${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "${TRACKING_ID:-$QUEST_ID}" 2>/dev/null || true
+"${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "${TRACKING_ID:-$QUEST_ID}" "$DISPLAY_TEXT" "$TRACKING_URL" "250" "${SPONSOR_NAME:-Unknown}" "DevTool" 2>/dev/null || true
 
-# Generate scroll card and output hook JSON via Python
-SPONSOR_ARGS=""
-if [ -n "$SPONSOR_NAME" ]; then
-  SPONSOR_ARGS="--sponsor \"$SPONSOR_NAME\""
-  if [ -n "$SPONSOR_TAGLINE" ]; then
-    SPONSOR_ARGS="$SPONSOR_ARGS --tagline \"$SPONSOR_TAGLINE\""
-  fi
-fi
-eval python3 "${SCRIPT_DIR}/quest-card.py" "\"$DISPLAY_TEXT\"" --reward 250 --json $SPONSOR_ARGS 2>/dev/null || exit 0
+exit 0

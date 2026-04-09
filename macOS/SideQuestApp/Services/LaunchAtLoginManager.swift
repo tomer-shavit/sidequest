@@ -26,6 +26,6 @@ class LaunchAtLoginManager {
     }
 
     func isEnabled() -> Bool {
-        return service.isEnabled
+        return service.status == .enabled
     }
 }

@@ -6,7 +6,10 @@ struct SideQuestApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView()
+            MenuContentView(
+                eventQueue: appDelegate.eventQueue,
+                stateManager: appDelegate.stateManager
+            )
         } label: {
             Image(systemName: "bell")
                 .help("SideQuest — Quest notifications")

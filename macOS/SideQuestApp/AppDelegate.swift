@@ -3,82 +3,109 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     var apiClient: APIClient?
     var windowManager: WindowManager?
+    var stateManager: StateManager?
     private var ipcListener: IPCListener?
     private var sleepWorkspaceObserver: NSObjectProtocol?
-    private var eventQueue: EventQueue?
+    var eventQueue: EventQueue?
     private var eventSyncManager: EventSyncManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        do {
-            // Set app as background-only (no dock icon)
-            NSApp.setActivationPolicy(.accessory)
+        // Set app as accessory (menu bar only, no dock icon)
+        NSApp.setActivationPolicy(.accessory)
 
-            // Register for auto-launch on login (one-time check)
-            if !LaunchAtLoginManager.shared.isEnabled() {
-                LaunchAtLoginManager.shared.registerForLoginItems()
-            }
-
-            // Initialize API client with hardcoded values for now
-            // (will be replaced with user auth flow in Phase 2)
-            let apiBase = "https://bd5x085yt3.execute-api.us-east-1.amazonaws.com"
-            let testToken = "0000000000000000000000000000000000000000000000000000000000000000"  // Placeholder 64-char token
-
-            apiClient = APIClient(apiBaseURL: apiBase, bearerToken: testToken)
-
-            // Initialize EventQueue and EventSyncManager
-            eventQueue = EventQueue()
-            windowManager?.setEventQueue(eventQueue!)
-
-            eventSyncManager = EventSyncManager(apiClient: apiClient!, eventQueue: eventQueue!)
-            eventSyncManager?.startPeriodicSync()
-            ErrorHandler.logInfo("EventSyncManager initialized and sync started")
-
-            // Initialize WindowManager
-            windowManager = WindowManager()
-            windowManager?.setAPIClient(apiClient!)
-            windowManager?.setEventQueue(eventQueue!)
-
-            // Start IPC listener for plugin triggers
-            ipcListener = IPCListener()
-            ipcListener?.onTriggerReceived = { [weak self] questId, trackingId in
-                self?.handleIPCTrigger(questId: questId, trackingId: trackingId)
-            }
-            do {
-                try ipcListener?.startListening()
-                ErrorHandler.logInfo("IPC listener initialized at startup")
-            } catch {
-                ErrorHandler.logNetworkError(error, endpoint: "/tmp/sidequest.sock")
-                // Continue anyway; quests can still be triggered manually
-            }
-
-            // Register for sleep/wake notifications to resume IPC after wake
-            registerSleepWakeObserver()
-            ErrorHandler.logInfo("Sleep/wake observer registered")
-
-            ErrorHandler.logInfo("SideQuest app launched successfully")
-
-        } catch {
-            ErrorHandler.logWindowError(error, operation: "app launch")
-            // App continues even if initialization partial fails
+        // Register for auto-launch on login (one-time check)
+        if !LaunchAtLoginManager.shared.isEnabled() {
+            LaunchAtLoginManager.shared.registerForLoginItems()
         }
+
+        // Load token from config file, fall back to placeholder for testing
+        let configDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SideQuest")
+        let configFile = configDir.appendingPathComponent("config.json")
+        var bearerToken = ""
+        var userId = "unknown"
+        var apiBase = "https://api.trysidequest.ai"
+
+        if let data = try? Data(contentsOf: configFile),
+           let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            bearerToken = config["token"] as? String ?? ""
+            userId = config["user_id"] as? String ?? "unknown"
+            apiBase = config["api_base"] as? String ?? apiBase
+        }
+
+        // Also try reading from plugin config as fallback
+        if bearerToken.isEmpty {
+            let pluginPaths = [
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/plugins/sidequest/config.json"),
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".sidequest/config.json")
+            ]
+            for path in pluginPaths {
+                if let data = try? Data(contentsOf: path),
+                   let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let token = config["token"] as? String, !token.isEmpty {
+                    bearerToken = token
+                    userId = config["user_id"] as? String ?? userId
+                    apiBase = config["api_base"] as? String ?? apiBase
+                    break
+                }
+            }
+        }
+
+        if bearerToken.isEmpty {
+            ErrorHandler.logInfo("No auth token found. API calls will fail. Place config at ~/Library/Application Support/SideQuest/config.json")
+        }
+
+        // Initialize services
+        apiClient = APIClient(apiBaseURL: apiBase, bearerToken: bearerToken)
+        stateManager = StateManager()
+        eventQueue = EventQueue()
+
+        // Initialize WindowManager and wire dependencies
+        windowManager = WindowManager()
+        windowManager?.setAPIClient(apiClient!)
+        windowManager?.setEventQueue(eventQueue!)
+        windowManager?.setUserId(userId)
+
+        // Initialize EventSyncManager
+        eventSyncManager = EventSyncManager(apiClient: apiClient!, eventQueue: eventQueue!)
+        eventSyncManager?.startPeriodicSync()
+
+        // Start IPC listener for plugin triggers
+        ipcListener = IPCListener()
+        ipcListener?.onTriggerReceived = { [weak self] questId, trackingId in
+            self?.handleIPCTrigger(questId: questId, trackingId: trackingId)
+        }
+        ipcListener?.onQuestReceived = { [weak self] quest in
+            self?.handleDirectQuest(quest)
+        }
+        do {
+            try ipcListener?.startListening()
+            ErrorHandler.logInfo("IPC listener started")
+        } catch {
+            ErrorHandler.logNetworkError(error, endpoint: "sidequest.sock")
+        }
+
+        // Register for sleep/wake notifications
+        registerSleepWakeObserver()
+
+        ErrorHandler.logInfo("SideQuest app launched successfully")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Final sync before app terminates
         eventSyncManager?.syncOnTermination()
         eventSyncManager?.stopPeriodicSync()
 
-        // Unregister sleep/wake observer
         if let observer = sleepWorkspaceObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+
+        ipcListener?.stopListening()
     }
 }
 
 extension AppDelegate {
     private func registerSleepWakeObserver() {
-        // Listen for system wake events
-        sleepWorkspaceObserver = NotificationCenter.default.addObserver(
+        sleepWorkspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
             queue: .main
@@ -88,91 +115,96 @@ extension AppDelegate {
     }
 
     private func applicationDidWake() {
-        // Called after system wake from sleep
-        ErrorHandler.logInfo("System woke from sleep; resuming IPC")
+        ErrorHandler.logInfo("System woke from sleep; checking IPC")
 
-        // IPC listener should still be running (Network.framework keeps connection alive)
-        // But verify it's still listening in case of timeout
-
-        // Optional: Log current IPC listener state
         if ipcListener != nil {
             ErrorHandler.logInfo("IPC listener active after wake")
         } else {
-            ErrorHandler.logInfo("IPC listener not found after wake; reinitializing")
-            // Reinitialize if somehow lost
             ipcListener = IPCListener()
             ipcListener?.onTriggerReceived = { [weak self] questId, trackingId in
                 self?.handleIPCTrigger(questId: questId, trackingId: trackingId)
             }
+            ipcListener?.onQuestReceived = { [weak self] quest in
+                self?.handleDirectQuest(quest)
+            }
             do {
                 try ipcListener?.startListening()
             } catch {
-                ErrorHandler.logNetworkError(error, endpoint: "/tmp/sidequest.sock")
+                ErrorHandler.logNetworkError(error, endpoint: "sidequest.sock")
             }
         }
     }
 
+    @MainActor
     func showTestQuest() {
-        do {
-            let testQuest = QuestData(
-                quest_id: "test-123",
-                display_text: "Test Quest: Explore New Features",
-                tracking_url: "https://example.com",
-                reward_amount: 250,
-                brand_name: "Test Corp",
-                category: "DevTool"
-            )
-            windowManager?.showQuest(testQuest)
-            ErrorHandler.logQuestDisplay("test-123")
-        } catch {
-            ErrorHandler.logWindowError(error, operation: "show test quest")
-        }
+        let testQuest = QuestData(
+            quest_id: "test-123",
+            display_text: "Test Quest: Explore New Features",
+            tracking_url: "https://example.com",
+            reward_amount: 250,
+            brand_name: "Test Corp",
+            category: "DevTool"
+        )
+        windowManager?.showQuest(testQuest)
     }
 
     func fetchAndShowQuest() {
-        guard let apiClient = apiClient else {
-            ErrorHandler.logInfo("API client not initialized")
-            return
-        }
+        guard let apiClient = apiClient else { return }
         Task {
             do {
                 let quest = try await apiClient.fetchQuest()
-                await MainActor.run {
-                    windowManager?.showQuest(quest)
+                await MainActor.run { [weak self] in
+                    self?.windowManager?.showQuest(quest)
                 }
             } catch {
-                // Silent failure — quest simply won't display
-                // Error already logged in APIClient
+                // Silent — quest won't display
+            }
+        }
+    }
+
+    func handleDirectQuest(_ quest: QuestData) {
+        Task {
+            if let stateManager = self.stateManager {
+                let shouldShow = await stateManager.shouldDisplayQuest()
+                if !shouldShow {
+                    ErrorHandler.logInfo("Quest blocked by state manager")
+                    return
+                }
+            }
+            await self.stateManager?.recordDisplay()
+            await MainActor.run { [weak self] in
+                self?.windowManager?.showQuest(quest)
             }
         }
     }
 
     func handleIPCTrigger(questId: String, trackingId: String) {
-        // Called when plugin sends trigger via IPC
-        // Fetch quest from API and display via WindowManager
-
         Task {
-            do {
-                guard let apiClient = self.apiClient else {
-                    ErrorHandler.logInfo("IPC trigger received but apiClient not ready")
+            // Check state manager for frequency/cooldown
+            if let stateManager = self.stateManager {
+                let shouldShow = await stateManager.shouldDisplayQuest()
+                if !shouldShow {
+                    ErrorHandler.logInfo("Quest blocked by state manager (cooldown/cap/disabled)")
                     return
                 }
+            }
 
+            guard let apiClient = self.apiClient else {
+                ErrorHandler.logInfo("IPC trigger received but apiClient not ready")
+                return
+            }
+
+            do {
                 let questData = try await apiClient.fetchQuest()
 
-                // Validate quest matches expected questId (security check)
-                if questData.quest_id != questId {
-                    ErrorHandler.logInfo("IPC questId mismatch: expected=\(questId), got=\(questData.quest_id)")
-                    // Still display (race condition acceptable)
-                }
+                // Record display in state manager
+                await self.stateManager?.recordDisplay()
 
-                DispatchQueue.main.async {
-                    self.windowManager?.showQuest(questData)
+                await MainActor.run { [weak self] in
+                    self?.windowManager?.showQuest(questData)
                 }
             } catch {
-                // API error — log but don't show to user
                 ErrorHandler.logNetworkError(error, endpoint: "/quest")
-                // Quest simply not displayed; no error message
             }
         }
     }
