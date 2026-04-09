@@ -33,52 +33,59 @@ class WindowManager: NSObject {
     // MARK: - Private Implementation
 
     private func displayQuest(_ questData: QuestData) {
-        // Position: top-right, just below system notification area
-        let mainScreen = NSScreen.main ?? NSScreen.screens.first!
-        let screenFrame = mainScreen.visibleFrame
+        do {
+            // Position: top-right, just below system notification area
+            let mainScreen = NSScreen.main ?? NSScreen.screens.first!
+            let screenFrame = mainScreen.visibleFrame
 
-        let x = screenFrame.maxX - 420  // 400pt wide + 20pt margin
-        let y = screenFrame.maxY - 100   // Just below system notifications (starts from top)
+            let x = screenFrame.maxX - 420  // 400pt wide + 20pt margin
+            let y = screenFrame.maxY - 100   // Just below system notifications (starts from top)
 
-        let frame = NSRect(x: x, y: y, width: 400, height: 250)
+            let frame = NSRect(x: x, y: y, width: 400, height: 250)
 
-        // Create borderless, floating window
-        let window = NSWindow(
-            contentRect: frame,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
+            // Create borderless, floating window
+            let window = NSWindow(
+                contentRect: frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
 
-        window.level = .floating          // Always on top
-        window.isOpaque = false           // Transparent background
-        window.backgroundColor = .clear
-        window.collectionBehavior = [.transient, .ignoresCycle]  // Don't affect focus
-        window.isMovableByWindowBackground = false
+            window.level = .floating          // Always on top
+            window.isOpaque = false           // Transparent background
+            window.backgroundColor = .clear
+            window.collectionBehavior = [.transient, .ignoresCycle]  // Don't affect focus
+            window.isMovableByWindowBackground = false
 
-        // Create SwiftUI content
-        let contentView = NotificationWindowView(
-            questData: questData,
-            onOpen: { [weak self] in self?.handleOpen(questData) },
-            onDismiss: { [weak self] in self?.handleDismiss() }
-        )
+            // Create SwiftUI content
+            let contentView = NotificationWindowView(
+                questData: questData,
+                onOpen: { [weak self] in self?.handleOpen(questData) },
+                onDismiss: { [weak self] in self?.handleDismiss() }
+            )
 
-        // Wrap SwiftUI in NSHostingView for NSWindow
-        window.contentView = NSHostingView(rootView: contentView)
+            // Wrap SwiftUI in NSHostingView for NSWindow
+            window.contentView = NSHostingView(rootView: contentView)
 
-        // Store reference
-        self.notificationWindow = window
+            // Store reference
+            self.notificationWindow = window
 
-        // Animate in from the right
-        animateIn(window)
+            // Animate in from the right
+            animateIn(window)
 
-        // Set auto-dismiss timer (8 seconds)
-        dismissTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
-            self?.handleDismiss()
+            // Set auto-dismiss timer (8 seconds)
+            dismissTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: false) { [weak self] _ in
+                self?.handleDismiss()
+            }
+
+            // Make window visible
+            window.makeKeyAndOrderFront(nil)
+            ErrorHandler.logQuestDisplay(questData.quest_id)
+
+        } catch {
+            ErrorHandler.logWindowError(error, operation: "display quest")
+            // Continue without showing error — user never knows
         }
-
-        // Make window visible
-        window.makeKeyAndOrderFront(nil)
     }
 
     private func animateIn(_ window: NSWindow) {

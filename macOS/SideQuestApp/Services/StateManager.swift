@@ -90,6 +90,7 @@ actor StateManager {
 
     private func readState() -> DisplayState {
         guard FileManager.default.fileExists(atPath: stateFilePath.path) else {
+            ErrorHandler.logInfo("State file does not exist, using defaults")
             return DisplayState()
         }
 
@@ -99,7 +100,7 @@ actor StateManager {
             let state = try decoder.decode(DisplayState.self, from: data)
             return state
         } catch {
-            os_log("Failed to read state: %@", log: .default, type: .error, error as CVarArg)
+            ErrorHandler.logStateError(error, operation: "read state")
             return DisplayState()  // Reset to defaults on corruption
         }
     }
@@ -111,7 +112,8 @@ actor StateManager {
             let data = try encoder.encode(state)
             try data.write(to: stateFilePath, options: .atomic)
         } catch {
-            os_log("Failed to write state: %@", log: .default, type: .error, error as CVarArg)
+            ErrorHandler.logStateError(error, operation: "write state")
+            // Continue even if write fails — state lost, but app continues
         }
     }
 }
