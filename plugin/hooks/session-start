@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 
-# SideQuest SessionStart Hook — sets up quest context or nudges login
+# SideQuest SessionStart Hook — Phase 19 Simplified
+# Three concerns: DND guidance, auth status check, first-run detection
+# Layer 1 context extraction: read CLAUDE.md and package.json, cache tech tags
 # Uses hookSpecificOutput format (same as Superpowers plugin)
 
 set -euo pipefail
+
+# Validate python3 exists
+command -v python3 >/dev/null 2>&1 || exit 0
 
 # Unified config location first, then legacy
 CONFIG_FILE="$HOME/.sidequest/config.json"
@@ -25,54 +30,153 @@ print(json.dumps({
 "
 }
 
+# ============================================================================
+# PHASE 1: Layer 1 Context Extraction (static, cached)
+# Read CLAUDE.md and package.json from current project directory
+# Extract tech stack tags and cache to ~/.sidequest/tech-context.json
+# ============================================================================
+
+python3 -c "
+import json
+import os
+import re
+
+project_dir = os.getcwd()
+tech_tags = []
+
+# Read CLAUDE.md if present
+claude_md_path = os.path.join(project_dir, 'CLAUDE.md')
+if os.path.isfile(claude_md_path):
+    try:
+        with open(claude_md_path) as f:
+            content = f.read().lower()
+        # Extract tech tags from CLAUDE.md (looks for language/framework mentions)
+        patterns = {
+            'javascript': r'javascript|\.js',
+            'typescript': r'typescript|\.ts',
+            'python': r'python|\.py',
+            'java': r'java\b',
+            'go': r'golang|\.go',
+            'rust': r'rust|cargo',
+            'react': r'react|jsx',
+            'nextjs': r'next\.?js',
+            'vue': r'vue\.?js',
+            'angular': r'angular\b',
+            'svelte': r'svelte',
+            'express': r'express',
+            'fastify': r'fastify',
+            'django': r'django',
+            'flask': r'flask',
+            'rails': r'rails|ruby on rails',
+            'spring': r'spring\b',
+            'tailwindcss': r'tailwind',
+            'postgresql': r'postgres|postgresql',
+            'mysql': r'mysql',
+            'mongodb': r'mongo',
+            'redis': r'redis\b',
+            'docker': r'docker',
+            'kubernetes': r'kubernetes|k8s',
+            'terraform': r'terraform',
+            'aws': r'aws\b|lambda|s3',
+            'gcp': r'gcp|google.cloud',
+            'azure': r'azure\b',
+            'cloudflare': r'cloudflare|workers',
+        }
+        for tag, pattern in patterns.items():
+            if re.search(pattern, content):
+                tech_tags.append(tag)
+    except:
+        pass
+
+# Read package.json if present
+package_json_path = os.path.join(project_dir, 'package.json')
+if os.path.isfile(package_json_path):
+    try:
+        with open(package_json_path) as f:
+            pkg = json.load(f)
+        # Extract from dependencies
+        deps = {}
+        for key in ['dependencies', 'devDependencies']:
+            deps.update(pkg.get(key, {}))
+        deps_str = ' '.join(deps.keys()).lower()
+
+        patterns = {
+            'react': r'react$',
+            'nextjs': r'next$',
+            'vue': r'vue$',
+            'angular': r'@angular',
+            'svelte': r'svelte',
+            'express': r'express$',
+            'fastify': r'fastify$',
+            'tailwindcss': r'tailwindcss',
+            'postgresql': r'pg$',
+            'mysql': r'mysql2?',
+            'mongodb': r'mongoose|mongodb',
+            'redis': r'redis$',
+            'docker': r'docker',
+            'jest': r'jest$',
+            'typescript': r'typescript$',
+            'webpack': r'webpack$',
+            'vite': r'vite$',
+        }
+        for tag, pattern in patterns.items():
+            if re.search(pattern, deps_str):
+                tech_tags.append(tag)
+    except:
+        pass
+
+# Deduplicate and cache
+tech_tags = list(set(tech_tags))[:15]
+tech_context = {'tags': tech_tags}
+
+# Atomic write to ~/.sidequest/tech-context.json
+import tempfile
+tech_file = os.path.expanduser('~/.sidequest/tech-context.json')
+os.makedirs(os.path.dirname(tech_file), exist_ok=True)
+temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(tech_file))
+try:
+    with os.fdopen(temp_fd, 'w') as f:
+        json.dump(tech_context, f)
+    os.rename(temp_path, tech_file)
+except:
+    try:
+        os.unlink(temp_path)
+    except:
+        pass
+" 2>/dev/null
+
+# ============================================================================
+# PHASE 2: Check auth status and emit guidance
+# ============================================================================
+
 if [ -f "$CONFIG_FILE" ]; then
   TOKEN=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('token',''))" "$CONFIG_FILE" 2>/dev/null || echo "")
   if [ -n "$TOKEN" ]; then
-    # Logged in — inject standing instructions for quest display
-    cat <<'CONTEXT' | json_output
-SideQuest plugin is enabled. When a stop hook delivers a quest in the format "SideQuest: TITLE +Ng. | SPONSOR -- TAGLINE", display it as:
+    # Logged in — emit three concerns: DND guidance, first-run detection
 
-1. A sponsor line: **SPONSOR** -- TAGLINE
-2. A scroll card in a fenced code block using this exact template (pad each content line to 28 chars between the pipes):
+    # First-run detection: check if timing-state.json exists
+    FIRST_RUN_GUIDANCE=""
+    TIMING_FILE="$HOME/.sidequest/timing-state.json"
+    if [ ! -f "$TIMING_FILE" ]; then
+      FIRST_RUN_GUIDANCE="Run /sidequest:status to see pipeline health and schedule your first quest."
+    fi
 
-```
-   ______________________________
- / \                             \.
-|   |       Side Quest           |.
- \_ |                            |.
-    |   {title padded to 24}     |.
-    |                      {+Ng} |.
-    |                            |.
-    |   > 1 Open    > 2 Save     |.
-    |   > 0 Skip                 |.
-    |   _________________________|___
-    |  /                            /.
-    \_/____________________________/.
-```
+    cat <<CONTEXT | json_output
+SideQuest is enabled and authenticated.
 
-Wrap long titles across multiple lines. Do not write any additional text -- just the sponsor line and the code block, nothing else.
+**DND Guidance:** If you feel overwhelmed by quests, don't disable the plugin. Instead, use /sidequest:dnd to temporarily pause quests. You control the schedule.
 
-If the user responds to a quest naturally (e.g. "yeah", "check it out", "save that", "not interested") instead of pressing 1/2/0, use /sidequest:quest to handle their response.
+$FIRST_RUN_GUIDANCE
 CONTEXT
     exit 0
   fi
 fi
 
-# Not logged in — check setup state and guide
-GUIDANCE="SideQuest plugin installed but not authenticated."
+# ============================================================================
+# PHASE 3: Not logged in — nudge to authenticate
+# ============================================================================
 
-# Check if native app is installed
-APP_PATH="$HOME/Applications/SideQuestApp.app"
-if [ ! -d "$APP_PATH" ]; then
-  GUIDANCE="$GUIDANCE The native app is not installed."
-fi
-
-# Check if native app is running
-if ! pgrep -f "SideQuestApp" >/dev/null 2>&1; then
-  GUIDANCE="$GUIDANCE The native app is not running."
-fi
-
-GUIDANCE="$GUIDANCE Run /sidequest:login to authenticate, or run: curl -fsSL https://get.trysidequest.ai/setup.sh | sh for full setup."
+GUIDANCE="SideQuest plugin installed but not authenticated. Run /sidequest:login to authenticate."
 
 echo "$GUIDANCE" | json_output
 exit 0
