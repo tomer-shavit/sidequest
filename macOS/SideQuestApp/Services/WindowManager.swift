@@ -365,13 +365,12 @@ class WindowManager: NSObject {
             dismissTimer = nil
             timerStartDate = nil
         } else {
-            // Resume: schedule new timer with remaining time
-            guard dismissRemainingTime > 0 else {
-                handleDismiss()
-                return
-            }
+            // Resume: always give at least 2 seconds after unhover so the card
+            // doesn't vanish from rapid cursor enter/exit at the edges
+            let resumeTime = max(dismissRemainingTime, 2.0)
+            dismissRemainingTime = resumeTime
             timerStartDate = Date()
-            dismissTimer = Timer.scheduledTimer(withTimeInterval: dismissRemainingTime, repeats: false) { [weak self] _ in
+            dismissTimer = Timer.scheduledTimer(withTimeInterval: resumeTime, repeats: false) { [weak self] _ in
                 Task { @MainActor in
                     self?.handleDismiss()
                 }
