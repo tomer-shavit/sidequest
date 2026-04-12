@@ -90,16 +90,18 @@ else
   exit 1
 fi
 
-# Step 5: Remove login items
+# Step 5: Remove login items and launchd KeepAlive
 echo -n "🔑 Removing from login items... "
 
 # Remove LaunchAgent plist files
 rm -f ~/.config/sidequest/launchagent.plist 2>/dev/null || true
 rm -f ~/Library/LaunchAgents/${BUNDLE_ID}.plist 2>/dev/null || true
 rm -f ~/Library/LaunchAgents/${BUNDLE_ID}*.plist 2>/dev/null || true
+rm -f ~/Library/LaunchAgents/ai.sidequest.app.plist 2>/dev/null || true
 
 # Also unload from launchctl if still loaded
 launchctl unload ~/Library/LaunchAgents/${BUNDLE_ID}.plist 2>/dev/null || true
+launchctl unload ~/Library/LaunchAgents/ai.sidequest.app.plist 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC}"
 

@@ -182,7 +182,36 @@ hdiutil detach "$MOUNT_PATH" 2>/dev/null || true
 rm -rf "$MOUNT_PATH"
 echo -e "${GREEN}✓${NC}"
 
-# Step 10: Launch app (if not skipped)
+# Step 10: Setup launchd KeepAlive for auto-restart on crash
+echo -n "🔄 Setting up launchd auto-restart... "
+
+# Get the plugin root directory (relative to this script)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/plugin"
+
+if [ -f "$PLUGIN_DIR/resources/ai.sidequest.app.plist" ]; then
+  # Copy and configure the plist template
+  PLIST_TEMPLATE="$PLUGIN_DIR/resources/ai.sidequest.app.plist"
+  PLIST_DEST="$HOME/Library/LaunchAgents/ai.sidequest.app.plist"
+
+  # Create LaunchAgents directory if it doesn't exist
+  mkdir -p "$HOME/Library/LaunchAgents" 2>/dev/null
+
+  # Copy plist and replace __APP_PATH__ placeholder
+  sed "s|__APP_PATH__|$INSTALL_PATH|g" "$PLIST_TEMPLATE" > "$PLIST_DEST" 2>/dev/null
+
+  # Set proper permissions
+  chmod 644 "$PLIST_DEST" 2>/dev/null
+
+  # Load the launchd agent
+  launchctl load "$PLIST_DEST" 2>/dev/null || true
+
+  echo -e "${GREEN}✓${NC}"
+else
+  echo -e "${YELLOW}SKIPPED${NC} (plist template not found)"
+fi
+
+# Step 11: Launch app (if not skipped)
 if [ "$SKIP_LAUNCH" = false ]; then
   echo ""
   echo "🚀 Launching SideQuest..."
@@ -197,8 +226,9 @@ echo "================================================"
 echo ""
 echo "📍 Location: /Applications/SideQuest.app"
 echo ""
-echo "🔑 Auto-Launch:"
+echo "🔑 Auto-Launch & Auto-Restart:"
 echo "   The app will register itself for auto-launch on first run."
+echo "   If the app crashes, launchd will automatically restart it."
 echo "   To verify: System Settings > General > Login Items"
 echo ""
 echo "📚 For help: https://docs.trysidequest.ai"
