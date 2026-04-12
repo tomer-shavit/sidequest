@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 
-# SideQuest Stop Hook
-# Displays quest card by asking the model to append it to the response.
-# Uses decision:block + reason — model mediates display but with clear framing
-# that this is a user-installed plugin for quest rewards.
+# SideQuest Stop Hook — Quest Timing Redesign
+# Phase 19: Two triggers (git commit OR 10min gap), hard caps (20min cooldown, 5/day)
+# Two-layer context extraction (static + dynamic), IPC socket connection test
 # ALL failures exit 0 silently — user never sees errors.
 
-INPUT=$(cat)
+# Validate python3 exists (required for JSON parsing and file I/O)
+command -v python3 >/dev/null 2>&1 || exit 0
 
-# Active quest tracking (re-fire guard disabled for testing)
-ACTIVE_FILE="${CLAUDE_PLUGIN_DATA}/active-quest.json"
+# ============================================================================
+# PHASE 1: Load config and establish error logging
+# ============================================================================
 
-# Check for config file with auth token (unified location first, then legacy)
 CONFIG_FILE="$HOME/.sidequest/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
   CONFIG_FILE="${CLAUDE_PLUGIN_DATA}/config.json"
@@ -19,6 +19,19 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 0
   fi
 fi
+
+# Error logging helper
+log_error() {
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $1" >> "$HOME/.sidequest/hook-errors.log" 2>/dev/null
+  # Truncate log if over 100KB to prevent disk bloat
+  if [ -f "$HOME/.sidequest/hook-errors.log" ]; then
+    SIZE=$(stat -f%z "$HOME/.sidequest/hook-errors.log" 2>/dev/null || echo 0)
+    if [ "$SIZE" -gt 102400 ]; then
+      tail -n 500 "$HOME/.sidequest/hook-errors.log" > "$HOME/.sidequest/hook-errors.log.tmp"
+      mv "$HOME/.sidequest/hook-errors.log.tmp" "$HOME/.sidequest/hook-errors.log" 2>/dev/null
+    fi
+  fi
+}
 
 # Read config (use python3 for reliable JSON parsing)
 eval "$(python3 -c "
@@ -29,9 +42,16 @@ try:
     print(f'TOKEN={shlex.quote(str(c.get(\"token\",\"\")))}')
     print(f'ENABLED={shlex.quote(str(c.get(\"enabled\",True)).lower())}')
     print(f'API_BASE={shlex.quote(str(c.get(\"api_base\",\"\")))}')
-    print(f'ROUND_ROBIN={c.get(\"round_robin\",0)}')
-except: pass
+    print(f'DND_UNTIL={shlex.quote(str(c.get(\"dnd_until\",\"\")))}')
+except Exception as e:
+    import sys
+    print('ERROR_CONFIG=parse_failed')
 " "$CONFIG_FILE" 2>/dev/null)"
+
+if [ "$ERROR_CONFIG" = "parse_failed" ]; then
+  log_error "Config parse error: $CONFIG_FILE"
+  exit 0
+fi
 
 if [ -z "$TOKEN" ]; then
   exit 0
@@ -41,41 +61,220 @@ if [ "$ENABLED" = "false" ]; then
   exit 0
 fi
 
-# Local round-robin counter (for testing: show quest every N messages)
-COUNTER_FILE="${CLAUDE_PLUGIN_DATA}/counter"
-
-if [ -n "$ROUND_ROBIN" ] && [ "$ROUND_ROBIN" -gt 0 ] 2>/dev/null; then
-  # Local round-robin mode: skip server frequency, use local counter
-  COUNT=0
-  if [ -f "$COUNTER_FILE" ]; then
-    COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
-  fi
-  COUNT=$((COUNT + 1))
-  echo "$COUNT" > "$COUNTER_FILE" 2>/dev/null
-
-  REMAINDER=$((COUNT % ROUND_ROBIN))
-  if [ "$REMAINDER" -ne 0 ]; then
+# Check DND (Do Not Disturb) mode
+if [ -n "$DND_UNTIL" ]; then
+  NOW=$(date +%s)
+  if [ "$NOW" -lt "$DND_UNTIL" ]; then
     exit 0
   fi
 fi
 
 API_BASE="${API_BASE:-https://api.trysidequest.ai}"
 
-# Extract context tags from conversation history (inline, <100ms)
-SCRIPT_DIR_CTX="$(cd "$(dirname "$0")" && pwd)"
-CONTEXT_TAGS="[]"
-HISTORY_FILE="$HOME/.claude/history.jsonl"
-if [ -f "$HISTORY_FILE" ]; then
-  CONTEXT_TAGS=$(python3 "${SCRIPT_DIR_CTX}/extract-context.py" "$HISTORY_FILE" "$(pwd)" 2>/dev/null) || CONTEXT_TAGS="[]"
+# ============================================================================
+# PHASE 2: Load timing state (atomic read)
+# ============================================================================
+
+TIMING_FILE="$HOME/.sidequest/timing-state.json"
+CURRENT_TIME=$(date +%s)
+LAST_HOOK_FIRE=0
+LAST_QUEST_SHOWN=0
+DAILY_QUEST_COUNT=0
+DAILY_RESET_DATE=""
+
+if [ -f "$TIMING_FILE" ]; then
+  eval "$(python3 -c "
+import json, shlex, sys, time
+try:
+    with open(sys.argv[1]) as f:
+        t = json.load(f)
+    print(f'LAST_HOOK_FIRE={t.get(\"last_hook_fire\",0)}')
+    print(f'LAST_QUEST_SHOWN={t.get(\"last_quest_shown\",0)}')
+    print(f'DAILY_QUEST_COUNT={t.get(\"daily_quest_count\",0)}')
+    print(f'DAILY_RESET_DATE={shlex.quote(str(t.get(\"daily_reset_date\",\"\")))}')
+except:
+    pass
+" "$TIMING_FILE" 2>/dev/null)"
 fi
 
-# Call server with 2-second timeout, include context tags
+# ============================================================================
+# PHASE 3: Check triggers (git commit OR 10min gap)
+# ============================================================================
+
+# Trigger (a): Check for git commit since last hook fire
+GIT_TRIGGER=0
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  # We're in a git repo — check for recent commits
+  LAST_COMMIT_TIME=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+  if [ "$LAST_COMMIT_TIME" -gt "$LAST_HOOK_FIRE" ]; then
+    GIT_TRIGGER=1
+  fi
+fi
+
+# Trigger (b): Check if >10 minutes have elapsed since last hook fire
+TIME_SINCE_LAST_HOOK=$((CURRENT_TIME - LAST_HOOK_FIRE))
+TIME_TRIGGER=0
+if [ "$TIME_SINCE_LAST_HOOK" -gt 600 ]; then
+  TIME_TRIGGER=1
+fi
+
+# If neither trigger fires, skip quest entirely
+if [ "$GIT_TRIGGER" -eq 0 ] && [ "$TIME_TRIGGER" -eq 0 ]; then
+  exit 0
+fi
+
+# ============================================================================
+# PHASE 4: Check hard caps (20min cooldown, 5/day limit)
+# ============================================================================
+
+# Cap 1: Min 20 minutes between quests (local optimization)
+TIME_SINCE_LAST_QUEST=$((CURRENT_TIME - LAST_QUEST_SHOWN))
+if [ "$TIME_SINCE_LAST_QUEST" -lt 1200 ]; then
+  exit 0
+fi
+
+# Cap 2: Max 5 quests per day
+TODAY=$(date +%Y-%m-%d)
+if [ "$DAILY_RESET_DATE" != "$TODAY" ]; then
+  # New day — reset counter
+  DAILY_QUEST_COUNT=0
+  DAILY_RESET_DATE="$TODAY"
+fi
+if [ "$DAILY_QUEST_COUNT" -ge 5 ]; then
+  exit 0
+fi
+
+# ============================================================================
+# PHASE 5: Load context tags (Layer 1 static + Layer 2 dynamic)
+# ============================================================================
+
+CONTEXT_TAGS="[]"
+
+# Layer 1 (STATIC): Read from cached tech-context.json (loaded by session-start)
+TECH_CONTEXT_FILE="$HOME/.sidequest/tech-context.json"
+if [ -f "$TECH_CONTEXT_FILE" ]; then
+  TECH_TAGS=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        tc = json.load(f)
+    print(json.dumps(tc.get('tags', [])))
+except:
+    print('[]')
+" "$TECH_CONTEXT_FILE" 2>/dev/null) || TECH_TAGS="[]"
+else
+  TECH_TAGS="[]"
+fi
+
+# Layer 2 (DYNAMIC): Run git diff and extract keywords (fallback: history.jsonl)
+DYNAMIC_TAGS="[]"
+
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  # We're in a git repo — analyze recent changes
+  DYNAMIC_TAGS=$(python3 -c "
+import subprocess
+import json
+import re
+
+# Get recent file changes
+try:
+    result = subprocess.run(
+        ['git', 'diff', 'HEAD~1', '--name-only', '--diff-filter=ACDMR'],
+        capture_output=True, text=True, timeout=2
+    )
+    files = result.stdout.strip().split('\n') if result.stdout else []
+except:
+    files = []
+
+tags = set()
+
+# Extract from file extensions and paths
+extension_map = {
+    '.py': 'python',
+    '.js': 'javascript',
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.jsx': 'javascript',
+    '.java': 'java',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.rb': 'ruby',
+    '.swift': 'swift',
+    '.kt': 'kotlin',
+    '.cs': 'csharp',
+    '.cpp': 'cpp',
+    '.c': 'c',
+    '.php': 'php',
+    '.sql': 'sql',
+}
+
+patterns = {
+    'react': r'react|jsx|tsx|usestate|useeffect',
+    'nextjs': r'next\.js|nextjs|next\.config',
+    'typescript': r'\.ts\b|tsconfig|typescript',
+    'docker': r'dockerfile|docker-compose',
+    'kubernetes': r'k8s|kubectl|helm',
+    'terraform': r'\.tf\b|terraform',
+    'cicd': r'\.github/workflows|\.gitlab-ci',
+    'postgresql': r'postgres|pg_|psql',
+    'mongodb': r'mongo|mongoose',
+}
+
+for f in files:
+    # Check extension
+    for ext, tag in extension_map.items():
+        if f.endswith(ext):
+            tags.add(tag)
+
+    # Check patterns in path
+    for tag, pattern in patterns.items():
+        if re.search(pattern, f, re.I):
+            tags.add(tag)
+
+print(json.dumps(list(tags)[:10]))  # Max 10 tags
+" 2>/dev/null) || DYNAMIC_TAGS="[]"
+else
+  # Not a git repo — fallback to history.jsonl extraction
+  SCRIPT_DIR_CTX="$(cd "$(dirname "$0")" && pwd)"
+  HISTORY_FILE="$HOME/.claude/history.jsonl"
+  if [ -f "$HISTORY_FILE" ]; then
+    DYNAMIC_TAGS=$(python3 "${SCRIPT_DIR_CTX}/extract-context.py" "$HISTORY_FILE" "$(pwd)" 2>/dev/null) || DYNAMIC_TAGS="[]"
+  fi
+fi
+
+# Merge static and dynamic tags (deduplicated)
+CONTEXT_TAGS=$(python3 -c "
+import json, sys
+tech = json.loads(sys.argv[1])
+dynamic = json.loads(sys.argv[2])
+merged = list(set(tech + dynamic))[:15]  # Max 15 total tags
+print(json.dumps(merged))
+" "$TECH_TAGS" "$DYNAMIC_TAGS" 2>/dev/null) || CONTEXT_TAGS="[]"
+
+# ============================================================================
+# PHASE 6: Test IPC socket connection
+# ============================================================================
+
+SOCKET_PATH="$HOME/.sidequest/sidequest.sock"
+if ! echo "" | nc -U -w1 "$SOCKET_PATH" 2>/dev/null; then
+  # Socket exists but app isn't responding — stale socket or hung app
+  log_error "Socket connection failed: $SOCKET_PATH"
+  exit 0
+fi
+
+# ============================================================================
+# PHASE 7: Fetch quest from API
+# ============================================================================
+
 RESPONSE=$(curl -s --max-time 2 \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -X POST \
   -d "{\"context_tags\":${CONTEXT_TAGS}}" \
-  "${API_BASE}/quest" 2>/dev/null) || exit 0
+  "${API_BASE}/quest" 2>/dev/null) || {
+  log_error "API call failed: $API_BASE/quest"
+  exit 0
+}
 
 # Check if response is empty or has no quest
 if [ -z "$RESPONSE" ] || [ "$RESPONSE" = "{}" ]; then
@@ -90,30 +289,88 @@ try:
     for k in ('display_text','subtitle','tracking_url','quest_id','reward_amount','brand_name','category'):
         v = r.get(k, '')
         print(f'{k.upper()}={shlex.quote(str(v))}')
-except: pass
+except Exception as e:
+    import sys
+    print('ERROR_RESPONSE=parse_failed')
 " 2>/dev/null)"
+
+if [ "$ERROR_RESPONSE" = "parse_failed" ]; then
+  log_error "Quest response parse error"
+  exit 0
+fi
 
 if [ -z "$DISPLAY_TEXT" ] || [ -z "$TRACKING_URL" ]; then
   exit 0
 fi
 
-# Save active quest for the intercept hook (also prevents re-fire)
-cat > "$ACTIVE_FILE" 2>/dev/null << QUESTJSON
-{"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","subtitle":"${SUBTITLE}","tracking_url":"${TRACKING_URL}","reward_amount":${REWARD_AMOUNT:-250},"brand_name":"${BRAND_NAME:-Unknown}","category":"${CATEGORY:-DevTool}"}
-QUESTJSON
+# ============================================================================
+# PHASE 8: Send quest via IPC socket to native app
+# ============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "$QUEST_ID" "$DISPLAY_TEXT" "$SUBTITLE" "$TRACKING_URL" "${REWARD_AMOUNT:-250}" "${BRAND_NAME:-Unknown}" "${CATEGORY:-DevTool}" 2>/dev/null || {
+  log_error "Socket send failed for quest: $QUEST_ID"
+  exit 0
+}
 
 # Save last quest for retrigger skill (use ~/.sidequest/ so skills can find it)
 mkdir -p "$HOME/.sidequest" 2>/dev/null
-cat > "$HOME/.sidequest/last-quest.json" 2>/dev/null << LASTJSON
-{"quest_id":"${QUEST_ID}","display_text":"${DISPLAY_TEXT}","subtitle":"${SUBTITLE}","tracking_url":"${TRACKING_URL}","reward_amount":${REWARD_AMOUNT:-250},"brand_name":"${BRAND_NAME:-Unknown}","category":"${CATEGORY:-DevTool}"}
-LASTJSON
+python3 -c "
+import json
+quest = {
+    'quest_id': '$QUEST_ID',
+    'display_text': '$DISPLAY_TEXT',
+    'subtitle': '$SUBTITLE',
+    'tracking_url': '$TRACKING_URL',
+    'reward_amount': ${REWARD_AMOUNT:-250},
+    'brand_name': '$BRAND_NAME',
+    'category': '$CATEGORY'
+}
+# Atomic write: write to temp, then rename
+import os, tempfile
+temp_fd, temp_path = tempfile.mkstemp(dir=os.path.expanduser('~/.sidequest'))
+try:
+    with os.fdopen(temp_fd, 'w') as f:
+        json.dump(quest, f)
+    os.rename(temp_path, os.path.expanduser('~/.sidequest/last-quest.json'))
+except:
+    try:
+        os.unlink(temp_path)
+    except:
+        pass
+" 2>/dev/null
 
-# IPC trigger to native app (sends full quest data)
-# Verify socket exists before attempting delivery
-SOCKET_PATH="$HOME/.sidequest/sidequest.sock"
-if [ -S "$SOCKET_PATH" ]; then
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  "${SCRIPT_DIR}/xpc-socket-helper.sh" "$QUEST_ID" "$QUEST_ID" "$DISPLAY_TEXT" "$SUBTITLE" "$TRACKING_URL" "${REWARD_AMOUNT:-250}" "${BRAND_NAME:-Unknown}" "${CATEGORY:-DevTool}" 2>/dev/null || true
-fi
+# ============================================================================
+# PHASE 9: Update timing state (atomic write)
+# ============================================================================
+
+NEW_DAILY_COUNT=$((DAILY_QUEST_COUNT + 1))
+
+python3 -c "
+import json
+import os
+import tempfile
+
+timing_state = {
+    'last_hook_fire': $CURRENT_TIME,
+    'last_quest_shown': $CURRENT_TIME,
+    'daily_quest_count': $NEW_DAILY_COUNT,
+    'daily_reset_date': '$TODAY'
+}
+
+# Atomic write: write to temp, then rename
+timing_file = os.path.expanduser('~/.sidequest/timing-state.json')
+os.makedirs(os.path.dirname(timing_file), exist_ok=True)
+temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(timing_file))
+try:
+    with os.fdopen(temp_fd, 'w') as f:
+        json.dump(timing_state, f)
+    os.rename(temp_path, timing_file)
+except:
+    try:
+        os.unlink(temp_path)
+    except:
+        pass
+" 2>/dev/null
 
 exit 0
