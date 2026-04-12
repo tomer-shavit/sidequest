@@ -6,12 +6,13 @@
     <string>ai.sidequest.app</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/open</string>
-        <string>-a</string>
-        <string>__APP_PATH__</string>
+        <string>__APP_PATH__/Contents/MacOS/SideQuestApp</string>
     </array>
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>ThrottleInterval</key>
