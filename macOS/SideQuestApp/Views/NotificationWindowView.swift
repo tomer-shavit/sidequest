@@ -3,7 +3,6 @@ import SwiftUI
 struct NotificationWindowView: View {
     let questData: QuestData
     let onOpen: () -> Void
-    let onSave: () -> Void
     let onDismiss: () -> Void
     @ObservedObject var hoverState: QuestHoverState
     let dismissDuration: Double
@@ -12,7 +11,6 @@ struct NotificationWindowView: View {
         QuestCardView(
             questData: questData,
             onOpen: onOpen,
-            onSave: onSave,
             onDismiss: onDismiss,
             hoverState: hoverState,
             dismissDuration: dismissDuration
@@ -33,7 +31,6 @@ struct NotificationWindowView_Previews: PreviewProvider {
                 category: "DevTool"
             ),
             onOpen: { print("Opened") },
-            onSave: { print("Saved") },
             onDismiss: { print("Dismissed") },
             hoverState: QuestHoverState(),
             dismissDuration: 12.0

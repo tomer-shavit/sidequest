@@ -3,7 +3,6 @@ import SwiftUI
 struct QuestCardView: View {
     let questData: QuestData
     let onOpen: () -> Void
-    let onSave: () -> Void
     let onDismiss: () -> Void
     @ObservedObject var hoverState: QuestHoverState
     let dismissDuration: Double
@@ -74,7 +73,6 @@ struct QuestCardView: View {
             // Keyboard shortcut hints
             HStack(spacing: 12) {
                 shortcutHint("⌘⌃O", label: "Open")
-                shortcutHint("⌘⌃S", label: "Save")
                 shortcutHint("⌘⌃D", label: "Skip")
             }
             .padding(.top, 2)
@@ -191,7 +189,6 @@ struct QuestCardView_Previews: PreviewProvider {
                     category: "DevTool"
                 ),
                 onOpen: {},
-                onSave: {},
                 onDismiss: {},
                 hoverState: QuestHoverState(),
                 dismissDuration: 8.0
@@ -207,7 +204,6 @@ struct QuestCardView_Previews: PreviewProvider {
                     category: "DevTool"
                 ),
                 onOpen: {},
-                onSave: {},
                 onDismiss: {},
                 hoverState: QuestHoverState(),
                 dismissDuration: 8.0

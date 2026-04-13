@@ -147,7 +147,6 @@ class WindowManager: NSObject {
         let contentView = NotificationWindowView(
             questData: questData,
             onOpen: { [weak self] in self?.handleOpen(questData) },
-            onSave: { [weak self] in self?.handleSave(questData) },
             onDismiss: { [weak self] in self?.handleDismiss() },
             hoverState: hoverState,
             dismissDuration: dismissSeconds
@@ -250,8 +249,7 @@ class WindowManager: NSObject {
 
             switch id {
             case 1: manager.handleOpen(quest)
-            case 2: manager.handleSave(quest)
-            case 3: manager.handleDismiss()
+            case 2: manager.handleDismiss()
             default: break
             }
         }
@@ -292,12 +290,11 @@ class WindowManager: NSObject {
             &hotKeyHandlerRef
         )
 
-        // Register ⌘⌃O (open=1), ⌘⌃S (save=2), ⌘⌃D (dismiss=3)
+        // Register ⌘⌃O (open=1), ⌘⌃D (dismiss=2)
         let modifiers = UInt32(cmdKey | controlKey)
         let keys: [(keyCode: UInt32, id: UInt32)] = [
             (31, 1),  // 'o'
-            (1, 2),   // 's'
-            (2, 3),   // 'd'
+            (2, 2),   // 'd'
         ]
         let signature = OSType(0x5351_5354) // "SQST"
 
@@ -406,57 +403,6 @@ class WindowManager: NSObject {
         handleDismiss()
     }
 
-    private func handleSave(_ questData: QuestData) {
-        let trackingId = deriveTrackingId(from: questData)
-        let capturedUserId = userId
-        Task {
-            await self.eventQueue?.addEvent(
-                userId: capturedUserId,
-                questId: questData.quest_id,
-                trackingId: trackingId,
-                eventType: "quest_saved",
-                metadata: [
-                    "source": .string("keyboard")
-                ]
-            )
-        }
-
-        // Persist to saved quests file
-        saveToDisk(questData)
-
-        handleDismiss()
-    }
-
-    private func saveToDisk(_ questData: QuestData) {
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".sidequest")
-        let file = dir.appendingPathComponent("saved-quests.json")
-
-        do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-
-            var saved: [[String: String]] = []
-            if let data = try? Data(contentsOf: file),
-               let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
-                saved = existing
-            }
-
-            saved.append([
-                "quest_id": questData.quest_id,
-                "display_text": questData.display_text,
-                "subtitle": questData.subtitle,
-                "tracking_url": questData.tracking_url,
-                "brand_name": questData.brand_name,
-                "category": questData.category,
-                "saved_at": ISO8601DateFormatter().string(from: Date())
-            ])
-
-            let json = try JSONSerialization.data(withJSONObject: saved, options: .prettyPrinted)
-            try json.write(to: file)
-        } catch {
-            // Silent failure — never break the user's flow
-        }
-    }
 
     private func handleDismiss() {
         dismissTimer?.invalidate()
