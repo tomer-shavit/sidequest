@@ -215,111 +215,71 @@ if [ "$DAILY_QUEST_COUNT" -ge "$RC_DAILY_CAP" ]; then
 fi
 
 # ============================================================================
-# PHASE 5: Load context tags (Layer 1 static + Layer 2 dynamic)
+# PHASE 5: Deep context extraction (v1.7 data-driven pipeline)
+# Reads all 4 sources: conversation, diff content, git metadata, config cache
+# Patterns, weights, and domains are data in config/*.json — not code
 # ============================================================================
 
-CONTEXT_TAGS="[]"
+SCRIPT_DIR_CTX="$(cd "$(dirname "$0")" && pwd)"
+CONTEXT_RESULT='{"weighted_tags":[],"domain":null}'
 
-# Layer 1 (STATIC): Read from cached tech-context.json (loaded by session-start)
-TECH_CONTEXT_FILE="$HOME/.sidequest/tech-context.json"
-if [ -f "$TECH_CONTEXT_FILE" ]; then
-  TECH_TAGS=$(python3 -c "
-import json, sys
-try:
-    with open(sys.argv[1]) as f:
-        tc = json.load(f)
-    print(json.dumps(tc.get('tags', [])))
-except:
-    print('[]')
-" "$TECH_CONTEXT_FILE" 2>/dev/null) || TECH_TAGS="[]"
-else
-  TECH_TAGS="[]"
-fi
-
-# Layer 2 (DYNAMIC): Run git diff and extract keywords (fallback: history.jsonl)
-DYNAMIC_TAGS="[]"
-
+# SRC-01: Read actual diff content (not just file names), capped at 50KB
+SIDEQUEST_DIFF=""
 if git rev-parse --git-dir >/dev/null 2>&1; then
-  # We're in a git repo — analyze recent changes
-  DYNAMIC_TAGS=$(python3 -c "
-import subprocess
-import json
-import re
-
-# Get recent file changes
-try:
-    result = subprocess.run(
-        ['git', 'diff', 'HEAD~1', '--name-only', '--diff-filter=ACDMR'],
-        capture_output=True, text=True, timeout=2
-    )
-    files = result.stdout.strip().split('\n') if result.stdout else []
-except:
-    files = []
-
-tags = set()
-
-# Extract from file extensions and paths
-extension_map = {
-    '.py': 'python',
-    '.js': 'javascript',
-    '.ts': 'typescript',
-    '.tsx': 'typescript',
-    '.jsx': 'javascript',
-    '.java': 'java',
-    '.go': 'go',
-    '.rs': 'rust',
-    '.rb': 'ruby',
-    '.swift': 'swift',
-    '.kt': 'kotlin',
-    '.cs': 'csharp',
-    '.cpp': 'cpp',
-    '.c': 'c',
-    '.php': 'php',
-    '.sql': 'sql',
-}
-
-patterns = {
-    'react': r'react|jsx|tsx|usestate|useeffect',
-    'nextjs': r'next\.js|nextjs|next\.config',
-    'typescript': r'\.ts\b|tsconfig|typescript',
-    'docker': r'dockerfile|docker-compose',
-    'kubernetes': r'k8s|kubectl|helm',
-    'terraform': r'\.tf\b|terraform',
-    'cicd': r'\.github/workflows|\.gitlab-ci',
-    'postgresql': r'postgres|pg_|psql',
-    'mongodb': r'mongo|mongoose',
-}
-
-for f in files:
-    # Check extension
-    for ext, tag in extension_map.items():
-        if f.endswith(ext):
-            tags.add(tag)
-
-    # Check patterns in path
-    for tag, pattern in patterns.items():
-        if re.search(pattern, f, re.I):
-            tags.add(tag)
-
-print(json.dumps(list(tags)[:10]))  # Max 10 tags
-" 2>/dev/null) || DYNAMIC_TAGS="[]"
-else
-  # Not a git repo — fallback to history.jsonl extraction
-  SCRIPT_DIR_CTX="$(cd "$(dirname "$0")" && pwd)"
-  HISTORY_FILE="$HOME/.claude/history.jsonl"
-  if [ -f "$HISTORY_FILE" ]; then
-    DYNAMIC_TAGS=$(python3 "${SCRIPT_DIR_CTX}/extract-context.py" "$HISTORY_FILE" "$(pwd)" 2>/dev/null) || DYNAMIC_TAGS="[]"
-  fi
+  SIDEQUEST_DIFF=$(timeout 1 git diff HEAD~1 2>/dev/null | head -c 51200) || SIDEQUEST_DIFF=""
 fi
+export SIDEQUEST_DIFF
 
-# Merge static and dynamic tags (deduplicated)
+# SRC-03: Read git branch name and most recent commit message
+SIDEQUEST_BRANCH=""
+SIDEQUEST_COMMIT_MSG=""
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  SIDEQUEST_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || SIDEQUEST_BRANCH=""
+  SIDEQUEST_COMMIT_MSG=$(git log -1 --format=%s 2>/dev/null) || SIDEQUEST_COMMIT_MSG=""
+fi
+export SIDEQUEST_BRANCH SIDEQUEST_COMMIT_MSG
+
+# SRC-02: Run full extraction (conversation + diff + git metadata + config cache)
+HISTORY_FILE="$HOME/.claude/history.jsonl"
+CONTEXT_RESULT=$(python3 "${SCRIPT_DIR_CTX}/extract-context.py" --mode full "$HISTORY_FILE" "$(pwd)" 2>/dev/null) || CONTEXT_RESULT='{"weighted_tags":[],"domain":null}'
+
+# SAFE-04: Unset diff content immediately — never persists beyond this script
+unset SIDEQUEST_DIFF SIDEQUEST_BRANCH SIDEQUEST_COMMIT_MSG
+
+# Flatten weighted tags to sorted slug array (highest-weight first)
+# Weights are used locally for prioritization — server gets flat tags like before
 CONTEXT_TAGS=$(python3 -c "
 import json, sys
-tech = json.loads(sys.argv[1])
-dynamic = json.loads(sys.argv[2])
-merged = list(set(tech + dynamic))[:15]  # Max 15 total tags
-print(json.dumps(merged))
-" "$TECH_TAGS" "$DYNAMIC_TAGS" 2>/dev/null) || CONTEXT_TAGS="[]"
+try:
+    result = json.loads(sys.argv[1])
+    tags = [t['tag'] for t in result.get('weighted_tags', [])]
+    print(json.dumps(tags))
+except:
+    print('[]')
+" "$CONTEXT_RESULT" 2>/dev/null) || CONTEXT_TAGS="[]"
+
+# Extract domain for analytics logging
+CONTEXT_DOMAIN=$(python3 -c "
+import json, sys
+try:
+    result = json.loads(sys.argv[1])
+    domain = result.get('domain')
+    print(domain if domain else '')
+except:
+    print('')
+" "$CONTEXT_RESULT" 2>/dev/null) || CONTEXT_DOMAIN=""
+
+# Inject domain as a context tag for matching (quests have domain tags at low weight)
+if [ -n "$CONTEXT_DOMAIN" ]; then
+  CONTEXT_TAGS=$(python3 -c "
+import json, sys
+tags = json.loads(sys.argv[1])
+domain_tag = 'domain_' + sys.argv[2]
+if domain_tag not in tags:
+    tags.append(domain_tag)
+print(json.dumps(tags))
+" "$CONTEXT_TAGS" "$CONTEXT_DOMAIN" 2>/dev/null) || true
+fi
 
 # ============================================================================
 # PHASE 6: Test IPC socket connection
@@ -336,11 +296,21 @@ fi
 # PHASE 7: Fetch quest from API
 # ============================================================================
 
+# Build request body — flat tags sorted by weight + optional domain for analytics
+REQUEST_BODY=$(python3 -c "
+import json, sys
+body = {'context_tags': json.loads(sys.argv[1])}
+domain = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
+if domain:
+    body['domain'] = domain
+print(json.dumps(body))
+" "$CONTEXT_TAGS" "$CONTEXT_DOMAIN" 2>/dev/null) || REQUEST_BODY="{\"context_tags\":[]}"
+
 RESPONSE=$(curl -s --max-time 5 \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -X POST \
-  -d "{\"context_tags\":${CONTEXT_TAGS}}" \
+  -d "$REQUEST_BODY" \
   "${API_BASE}/quest" 2>/dev/null) || {
   log_error "API call failed: $API_BASE/quest"
   exit 0
