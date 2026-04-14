@@ -107,6 +107,60 @@ PATTERNS = [
     (r'\bgraphql\b', 'graphql'),
     (r'\b(?:rest|api.endpoint|http.request)\b', 'rest_api'),
     (r'\bwebsocket\b', 'websockets'),
+
+    # Concepts — developer patterns and features
+    # Email: transactional email, email sending services
+    (r'\b(?:sendgrid|resend|postmark|nodemailer|mailgun|twilio.sendgrid)\b', 'email'),
+    (r'\b(?:smtp|mailer)\b', 'email'),
+    (r'\btransactional.?email\b', 'email'),
+    (r'\bemail.?template\b', 'email'),
+
+    # Scheduling: task scheduling, cron jobs, periodic execution
+    (r'\bcron\b', 'scheduling'),
+    (r'\bscheduler\b', 'scheduling'),
+    (r'\b(?:inngest|temporal)\b', 'scheduling'),
+    (r'\bbull\b|node.?schedule', 'scheduling'),
+    (r'\bdelayed.?job\b', 'scheduling'),
+    (r'\bbackground.?schedule\b', 'scheduling'),
+    (r'\binterval.?task\b', 'scheduling'),
+
+    # Feature Flags: feature toggles, experimentation platforms
+    (r'\bfeature.?flag\b', 'feature_flags'),
+    (r'\b(?:launch.?darkly|unleash|statsig)\b', 'feature_flags'),
+    (r'\bfeature.?toggle\b', 'feature_flags'),
+    (r'\bexperiment\b.*\b(?:flag|rollout)\b', 'feature_flags'),
+    (r'\bgradual.?rollout\b', 'feature_flags'),
+
+    # Background Jobs: async task queues, job workers
+    (r'\bworker\b', 'background_jobs'),
+    (r'\bjob.?queue\b', 'background_jobs'),
+    (r'\b(?:sidekiq|celery|resque)\b', 'background_jobs'),
+    (r'\bbackground.?task\b', 'background_jobs'),
+    (r'\basync.?job\b', 'background_jobs'),
+    (r'\bjob.?processor\b', 'background_jobs'),
+
+    # Secrets Management: secret vaults, credential storage
+    (r'\bvault\b', 'secrets_management'),
+    (r'\binfisical\b', 'secrets_management'),
+    (r'\bsecrets?.?manager\b', 'secrets_management'),
+    (r'\bapi.?key.?management\b', 'secrets_management'),
+    (r'\bdotenv\b', 'secrets_management'),
+    (r'\benvironment.?variable.*secret\b', 'secrets_management'),
+
+    # Link Management: URL shorteners, link tracking
+    (r'\burl.?shortener\b', 'link_management'),
+    (r'\b(?:dub|bitly|rebrandly)\b', 'link_management'),
+    (r'\bshort.?(?:link|url)\b', 'link_management'),
+    (r'\blink.?tracking\b', 'link_management'),
+    (r'\bredirect.?(?:url|link)\b', 'link_management'),
+
+    # Notifications: push notifications, notification services
+    (r'push.*notification', 'notifications'),
+    (r'\b(?:knock|novu|onesignal)\b', 'notifications'),
+    (r'\bnotification.?(?:service|hub)\b', 'notifications'),
+    (r'\balert.?system\b', 'notifications'),
+    (r'\bslack.*message.*api\b', 'notifications'),
+    (r'\bwebhook.*notification\b', 'notifications'),
 ]
 
 # Compile patterns once
