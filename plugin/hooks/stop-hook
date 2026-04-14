@@ -76,8 +76,23 @@ API_BASE="${API_BASE:-https://api.trysidequest.ai}"
 # ============================================================================
 
 # Acquire exclusive lock on timing state — if another hook instance holds it, skip this quest
-exec 9>"$HOME/.sidequest/timing-state.json.lock"
-flock -n 9 || exit 0
+# Use mkdir-based lock (POSIX-compatible — flock is Linux-only, not available on macOS)
+LOCK_DIR="$HOME/.sidequest/timing-state.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  # Lock exists — check if stale (>30s = hook crashed without cleanup)
+  if [ -d "$LOCK_DIR" ]; then
+    LOCK_AGE=$(( $(date +%s) - $(stat -f%m "$LOCK_DIR" 2>/dev/null || echo 0) ))
+    if [ "$LOCK_AGE" -gt 30 ]; then
+      rmdir "$LOCK_DIR" 2>/dev/null || true
+      mkdir "$LOCK_DIR" 2>/dev/null || exit 0
+    else
+      exit 0
+    fi
+  else
+    exit 0
+  fi
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
 
 TIMING_FILE="$HOME/.sidequest/timing-state.json"
 CURRENT_TIME=$(date +%s)
@@ -126,6 +141,28 @@ fi
 if [ "$GIT_TRIGGER" -eq 0 ] && [ "$TIME_TRIGGER" -eq 0 ]; then
   exit 0
 fi
+
+# Update last_hook_fire immediately — even if no quest is shown downstream,
+# the time trigger must not re-fire on every subsequent stop-hook invocation
+python3 -c "
+import json, os, tempfile
+timing_file = os.path.expanduser('~/.sidequest/timing-state.json')
+try:
+    with open(timing_file) as f:
+        state = json.load(f)
+except:
+    state = {}
+state['last_hook_fire'] = $CURRENT_TIME
+os.makedirs(os.path.dirname(timing_file), exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(timing_file))
+try:
+    with os.fdopen(fd, 'w') as f:
+        json.dump(state, f)
+    os.rename(tmp, timing_file)
+except:
+    try: os.unlink(tmp)
+    except: pass
+" 2>/dev/null
 
 # ============================================================================
 # PHASE 4: Load remote config (cached locally, fallback to defaults)
@@ -299,7 +336,7 @@ fi
 # PHASE 7: Fetch quest from API
 # ============================================================================
 
-RESPONSE=$(curl -s --max-time 2 \
+RESPONSE=$(curl -s --max-time 5 \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -X POST \

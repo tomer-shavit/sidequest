@@ -23,8 +23,6 @@ struct MenuContentView: View {
                 }
             }
 
-        Divider()
-
         Menu("Pause Quests") {
             Button("1 hour") { pauseFor(hours: 1) }
             Button("4 hours") { pauseFor(hours: 4) }
@@ -44,8 +42,6 @@ struct MenuContentView: View {
                 }
             }
         }
-
-        Divider()
 
         Button("Show Test Quest") {
             appDelegate.showTestQuest()
