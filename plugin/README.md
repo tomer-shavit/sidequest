@@ -36,14 +36,8 @@ Authenticate with Google. Run this to set up your account or re-authenticate if 
 ### `/sidequest:settings`
 Enable or disable the plugin permanently. Says "disable" to turn off, "enable" to turn back on.
 
-### `/sidequest:dnd [duration]`
-Temporarily pause quests. Default is 2 hours.
-
-**Examples:**
-- `/sidequest:dnd 1h` — Pause for 1 hour
-- `/sidequest:dnd 4h` — Pause for 4 hours  
-- `/sidequest:dnd until tomorrow` — Pause until tomorrow morning
-- `/sidequest:dnd cancel` — Cancel Do Not Disturb
+### `/sidequest:do-not-disturb`
+Toggle Do Not Disturb mode. Run once to pause quests, run again to resume.
 
 **Note:** This skill is automatically invoked when you express frustration about quests (e.g., "please pause" or "I'm annoyed").
 
@@ -78,7 +72,7 @@ Quests appear in two scenarios:
 - **Maximum 5 quests per day** — Daily counter resets at midnight.
 - **Minimum 20 minutes between quests** — Cooldown prevents quest fatigue.
 - **Interaction-based frequency** — Quests show after every 10 interactions (by default; configurable).
-- **Do Not Disturb respected** — If you run `/sidequest:dnd`, quests won't appear until the timer expires.
+- **Do Not Disturb respected** — If you run `/sidequest:do-not-disturb`, quests won't appear until you toggle it off.
 
 ### Context Extraction
 When a quest is selected, the plugin extracts two layers of context to choose relevant promotional content:
@@ -115,9 +109,9 @@ This context is used to match quests to your work but is **never sent to the ser
 
 4. **Check if Do Not Disturb is active**
    ```bash
-   cat ~/.sidequest/config.json | python3 -m json.tool | grep dnd_until
+   cat ~/.sidequest/config.json | python3 -m json.tool | grep do_not_disturb
    ```
-   If `dnd_until` is set to a future timestamp, quests are paused.
+   If `do_not_disturb` is `true`, quests are paused.
 
 5. **Review the error log**
    ```bash
@@ -202,7 +196,7 @@ tail -20 ~/.sidequest/hook-errors.log
 
 Use Do Not Disturb:
 ```
-/sidequest:dnd 2h
+/sidequest:do-not-disturb
 ```
 
 ### Disable permanently (keep plugin installed)
@@ -249,14 +243,14 @@ Advanced users can manually edit state files in `~/.sidequest/`:
   "token": "64-char-hex-string",
   "enabled": true,
   "api_base": "https://api.trysidequest.ai",
-  "dnd_until": null
+  "do_not_disturb": false
 }
 ```
 
 - `token`: Your auth token (generated via `/sidequest:login`)
 - `enabled`: Master on/off switch
 - `api_base`: API endpoint (usually should not change)
-- `dnd_until`: Unix timestamp when DND expires (null if not active)
+- `do_not_disturb`: Boolean toggle for Do Not Disturb mode (false if not active)
 
 ### `timing-state.json`
 ```json

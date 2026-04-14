@@ -144,7 +144,7 @@ path = os.path.expanduser('~/.sidequest/config.json')
 try:
     with open(path) as f:
         c = json.load(f)
-    dnd = c.get('dnd_until', 0)
+    dnd = c.get('do_not_disturb', 0)
     now = int(time.time())
     if dnd and dnd > now:
         remaining_min = (dnd - now) // 60
@@ -158,8 +158,8 @@ except:
 
 | Output | Status | Fix |
 |--------|--------|-----|
-| OFF | DND off | — |
-| ACTIVE:{min} | DND active ({min} minutes remaining) | Run `/sidequest:dnd cancel` to resume |
+| OFF | Do Not Disturb off | — |
+| ACTIVE:{min} | Do Not Disturb active ({min} minutes remaining) | Run `/sidequest:do-not-disturb` to cancel |
 
 ### 8. Error Log
 

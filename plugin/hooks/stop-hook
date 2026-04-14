@@ -42,7 +42,7 @@ try:
     print(f'TOKEN={shlex.quote(str(c.get(\"token\",\"\")))}')
     print(f'ENABLED={shlex.quote(str(c.get(\"enabled\",True)).lower())}')
     print(f'API_BASE={shlex.quote(str(c.get(\"api_base\",\"\")))}')
-    print(f'DND_UNTIL={shlex.quote(str(c.get(\"dnd_until\",\"\")))}')
+    print(f'DO_NOT_DISTURB={shlex.quote(str(c.get(\"do_not_disturb\",\"\")))}')
 except Exception as e:
     import sys
     print('ERROR_CONFIG=parse_failed')
@@ -61,10 +61,10 @@ if [ "$ENABLED" = "false" ]; then
   exit 0
 fi
 
-# Check DND (Do Not Disturb) mode
-if [ -n "$DND_UNTIL" ]; then
+# Check Do Not Disturb mode
+if [ -n "$DO_NOT_DISTURB" ]; then
   NOW=$(date +%s)
-  if [ "$NOW" -lt "$DND_UNTIL" ]; then
+  if [ "$NOW" -lt "$DO_NOT_DISTURB" ]; then
     exit 0
   fi
 fi

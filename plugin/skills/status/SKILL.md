@@ -92,18 +92,18 @@ except:
 
 ### 5. Do Not Disturb Status
 
-Check if DND is active:
+Check if Do Not Disturb is active:
 
 ```bash
 cat ~/.sidequest/config.json | python3 -c "
 import sys, json, time
 try:
     config = json.load(sys.stdin)
-    dnd_until = config.get('dnd_until')
+    do_not_disturb = config.get('do_not_disturb')
     now = int(time.time())
-    if dnd_until and dnd_until > now:
-        remaining = dnd_until - now
-        print(f'ACTIVE:{dnd_until}')
+    if do_not_disturb and do_not_disturb > now:
+        remaining = do_not_disturb - now
+        print(f'ACTIVE:{do_not_disturb}')
     else:
         print('OFF')
 except:
@@ -111,11 +111,11 @@ except:
 "
 ```
 
-- If output is `OFF`: DND status = "Off"
+- If output is `OFF`: Do Not Disturb status = "Off"
 - If output starts with `ACTIVE:`: Parse the timestamp
   - Convert to human-readable resume time (e.g., "until 5:30 PM today")
-  - Display as: "DND active until {time}"
-  - Add: "Run /sidequest:dnd cancel to resume immediately."
+  - Display as: "Do Not Disturb active until {time}"
+  - Add: "Run /sidequest:do-not-disturb to cancel early."
 
 ### 6. Plugin Enabled/Disabled
 

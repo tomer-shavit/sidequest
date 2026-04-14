@@ -309,7 +309,7 @@ if [ -f "$CONFIG_FILE" ]; then
     cat <<CONTEXT | json_output
 SideQuest is enabled and authenticated.
 
-**DND Guidance:** If you feel overwhelmed by quests, don't disable the plugin. Instead, use /sidequest:dnd to temporarily pause quests. You control the schedule.
+**DND Guidance:** If you feel overwhelmed by quests, don't disable the plugin. Instead, use /sidequest:do-not-disturb to temporarily pause quests. You control the schedule.
 
 $FIRST_RUN_GUIDANCE
 CONTEXT
