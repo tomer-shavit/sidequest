@@ -177,6 +177,120 @@ except:
 " "$REMOTE_CONFIG_URL" "$REMOTE_CONFIG_CACHE" 2>/dev/null
 
 # ============================================================================
+# PHASE 1.6: Auto-update check (compare local version to remote config)
+# ============================================================================
+
+SCRIPT_DIR_HOOK="$(cd "$(dirname "$0")" && pwd)"
+LOCAL_VERSION_FILE="$SCRIPT_DIR_HOOK/../VERSION"
+LOCAL_VERSION=""
+if [ -f "$LOCAL_VERSION_FILE" ]; then
+  LOCAL_VERSION=$(cat "$LOCAL_VERSION_FILE" 2>/dev/null | tr -d '[:space:]')
+fi
+
+python3 -c "
+import json, hashlib, os, shutil, sys, tarfile, tempfile
+
+cache_path = sys.argv[1]
+local_version = sys.argv[2]
+plugin_root = sys.argv[3]
+
+if not local_version or not os.path.isfile(cache_path):
+    sys.exit(0)
+
+try:
+    with open(cache_path) as f:
+        rc = json.load(f)
+except:
+    sys.exit(0)
+
+remote_version = rc.get('plugin_version', '')
+tarball_url = rc.get('plugin_tarball_url', '')
+expected_sha = rc.get('plugin_sha256', '')
+
+if not remote_version or not tarball_url or not expected_sha:
+    sys.exit(0)
+
+if remote_version == local_version:
+    sys.exit(0)
+
+# Version mismatch — download, verify, swap
+import urllib.request
+
+sidequest_dir = os.path.expanduser('~/.sidequest')
+os.makedirs(sidequest_dir, exist_ok=True)
+
+# Download tarball to temp file
+fd, tmp_tar = tempfile.mkstemp(suffix='.tar.gz', dir=sidequest_dir)
+try:
+    with urllib.request.urlopen(tarball_url, timeout=10) as resp:
+        data = resp.read()
+    with os.fdopen(fd, 'wb') as f:
+        f.write(data)
+
+    # SHA256 verification
+    sha = hashlib.sha256(data).hexdigest()
+    if sha != expected_sha:
+        os.unlink(tmp_tar)
+        sys.exit(0)  # Checksum mismatch — skip update silently
+
+    # Extract to temp directory
+    tmp_extract = tempfile.mkdtemp(dir=sidequest_dir)
+    with tarfile.open(tmp_tar, 'r:gz') as tar:
+        tar.extractall(tmp_extract)
+    os.unlink(tmp_tar)
+
+    # Find the extracted plugin directory
+    extracted_dirs = os.listdir(tmp_extract)
+    if len(extracted_dirs) != 1:
+        shutil.rmtree(tmp_extract)
+        sys.exit(0)
+    extracted_root = os.path.join(tmp_extract, extracted_dirs[0])
+
+    # Backup current hooks before swap
+    backup_dir = os.path.join(sidequest_dir, 'hooks.backup')
+    hooks_dir = os.path.join(plugin_root, 'hooks')
+    if os.path.isdir(hooks_dir):
+        if os.path.isdir(backup_dir):
+            shutil.rmtree(backup_dir)
+        shutil.copytree(hooks_dir, backup_dir)
+
+    # Atomic swap: copy new files over existing plugin
+    new_hooks = os.path.join(extracted_root, 'hooks')
+    if os.path.isdir(new_hooks):
+        for item in os.listdir(new_hooks):
+            src = os.path.join(new_hooks, item)
+            dst = os.path.join(hooks_dir, item)
+            if os.path.isdir(src):
+                if os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+
+    # Copy other directories (skills, scripts, etc.)
+    for subdir in ['skills', 'scripts', '.claude-plugin']:
+        new_sub = os.path.join(extracted_root, subdir)
+        old_sub = os.path.join(plugin_root, subdir)
+        if os.path.isdir(new_sub):
+            if os.path.isdir(old_sub):
+                shutil.rmtree(old_sub)
+            shutil.copytree(new_sub, old_sub)
+
+    # Update VERSION file
+    new_version_file = os.path.join(extracted_root, 'VERSION')
+    if os.path.isfile(new_version_file):
+        shutil.copy2(new_version_file, os.path.join(plugin_root, 'VERSION'))
+
+    # Clean up temp extraction
+    shutil.rmtree(tmp_extract)
+
+except Exception:
+    try: os.unlink(tmp_tar)
+    except: pass
+    pass  # Silently fail — never break the session
+" "$REMOTE_CONFIG_CACHE" "$LOCAL_VERSION" "$SCRIPT_DIR_HOOK/.." 2>/dev/null
+
+# ============================================================================
 # PHASE 2: Check auth status and emit guidance
 # ============================================================================
 
