@@ -31,97 +31,82 @@ print(json.dumps({
 }
 
 # ============================================================================
-# PHASE 1: Layer 1 Context Extraction (static, cached)
-# Read CLAUDE.md and package.json from current project directory
-# Extract tech stack tags and cache to ~/.sidequest/tech-context.json
+# PHASE 1: Layer 1 Context Extraction (static, cached, data-driven)
+# Uses config/patterns.json for CLAUDE.md scanning, config/config-files.json
+# for project file detection (SRC-04: pyproject.toml, go.mod, Cargo.toml, etc.)
 # ============================================================================
+
+SCRIPT_DIR_PHASE1="$(cd "$(dirname "$0")" && pwd)"
 
 python3 -c "
 import json
 import os
 import re
+import sys
+import tempfile
 
 project_dir = os.getcwd()
+config_dir = sys.argv[1]
 tech_tags = []
 
-# Read CLAUDE.md if present
+# Load config files
+with open(os.path.join(config_dir, 'patterns.json')) as f:
+    patterns_config = json.load(f)
+with open(os.path.join(config_dir, 'config-files.json')) as f:
+    config_files = json.load(f)
+
+# Build compiled patterns from patterns.json
+# Patterns are self-contained — they include their own \b boundaries where needed
+compiled_patterns = []
+for tag_def in patterns_config['tags']:
+    combined = '|'.join('(?:' + p + ')' for p in tag_def['patterns'])
+    compiled_patterns.append((re.compile(combined, re.IGNORECASE), tag_def['slug']))
+
+# Scan CLAUDE.md with patterns from patterns.json
 claude_md_path = os.path.join(project_dir, 'CLAUDE.md')
 if os.path.isfile(claude_md_path):
     try:
         with open(claude_md_path) as f:
-            content = f.read().lower()
-        # Extract tech tags from CLAUDE.md (looks for language/framework mentions)
-        patterns = {
-            'javascript': r'javascript|\.js',
-            'typescript': r'typescript|\.ts',
-            'python': r'python|\.py',
-            'java': r'java\b',
-            'go': r'golang|\.go',
-            'rust': r'rust|cargo',
-            'react': r'react|jsx',
-            'nextjs': r'next\.?js',
-            'vue': r'vue\.?js',
-            'angular': r'angular\b',
-            'svelte': r'svelte',
-            'express': r'express',
-            'fastify': r'fastify',
-            'django': r'django',
-            'flask': r'flask',
-            'rails': r'rails|ruby on rails',
-            'spring': r'spring\b',
-            'tailwindcss': r'tailwind',
-            'postgresql': r'postgres|postgresql',
-            'mysql': r'mysql',
-            'mongodb': r'mongo',
-            'redis': r'redis\b',
-            'docker': r'docker',
-            'kubernetes': r'kubernetes|k8s',
-            'terraform': r'terraform',
-            'aws': r'aws\b|lambda|s3',
-            'gcp': r'gcp|google.cloud',
-            'azure': r'azure\b',
-            'cloudflare': r'cloudflare|workers',
-        }
-        for tag, pattern in patterns.items():
-            if re.search(pattern, content):
-                tech_tags.append(tag)
+            content = f.read()
+        for regex, slug in compiled_patterns:
+            if regex.search(content):
+                tech_tags.append(slug)
     except:
         pass
 
-# Read package.json if present
-package_json_path = os.path.join(project_dir, 'package.json')
-if os.path.isfile(package_json_path):
-    try:
-        with open(package_json_path) as f:
-            pkg = json.load(f)
-        # Extract from dependencies
-        deps = {}
-        for key in ['dependencies', 'devDependencies']:
-            deps.update(pkg.get(key, {}))
-        deps_str = ' '.join(deps.keys()).lower()
+# Scan project config files using config-files.json (data-driven)
+for filename, rules in config_files.get('files', {}).items():
+    filepath = os.path.join(project_dir, filename)
+    if not os.path.isfile(filepath):
+        continue
 
-        patterns = {
-            'react': r'react$',
-            'nextjs': r'next$',
-            'vue': r'vue$',
-            'angular': r'@angular',
-            'svelte': r'svelte',
-            'express': r'express$',
-            'fastify': r'fastify$',
-            'tailwindcss': r'tailwindcss',
-            'postgresql': r'pg$',
-            'mysql': r'mysql2?',
-            'mongodb': r'mongoose|mongodb',
-            'redis': r'redis$',
-            'docker': r'docker',
-            'jest': r'jest$',
-            'typescript': r'typescript$',
-            'webpack': r'webpack$',
-            'vite': r'vite$',
-        }
-        for tag, pattern in patterns.items():
-            if re.search(pattern, deps_str):
-                tech_tags.append(tag)
+    # Base tag: file exists = this language is in play
+    tech_tags.append(rules['base_tag'])
+
+    try:
+        with open(filepath) as f:
+            content = f.read()
+
+        # JSON-based config files (package.json, composer.json)
+        dep_keys = rules.get('dependency_keys')
+        dep_patterns = rules.get('dep_patterns')
+        if dep_keys and dep_patterns:
+            pkg = json.loads(content)
+            deps = {}
+            for key in dep_keys:
+                deps.update(pkg.get(key, {}))
+            deps_str = ' '.join(deps.keys()).lower()
+            for pattern, tag in dep_patterns.items():
+                if pattern.lower() in deps_str:
+                    tech_tags.append(tag)
+
+        # Text-based config files (pyproject.toml, go.mod, Gemfile, etc.)
+        content_patterns = rules.get('content_patterns')
+        if content_patterns:
+            content_lower = content.lower()
+            for pattern, tag in content_patterns.items():
+                if pattern.lower() in content_lower:
+                    tech_tags.append(tag)
     except:
         pass
 
@@ -130,7 +115,6 @@ tech_tags = list(set(tech_tags))[:15]
 tech_context = {'tags': tech_tags}
 
 # Atomic write to ~/.sidequest/tech-context.json
-import tempfile
 tech_file = os.path.expanduser('~/.sidequest/tech-context.json')
 os.makedirs(os.path.dirname(tech_file), exist_ok=True)
 temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(tech_file))
@@ -143,7 +127,7 @@ except:
         os.unlink(temp_path)
     except:
         pass
-" 2>/dev/null
+" "${SCRIPT_DIR_PHASE1}/config" 2>/dev/null
 
 # ============================================================================
 # PHASE 1.5: Fetch remote config from S3 (500ms timeout, cache fallback)
