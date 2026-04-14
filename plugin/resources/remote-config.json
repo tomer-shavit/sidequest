@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "frequency_interval": 10,
+  "cooldown_minutes": 20,
+  "daily_cap": 5,
+  "trigger_gap_minutes": 10,
+  "plugin_version": "0.1.0",
+  "plugin_sha256": "",
+  "plugin_tarball_url": ""
+}

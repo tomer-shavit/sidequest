@@ -128,23 +128,52 @@ if [ "$GIT_TRIGGER" -eq 0 ] && [ "$TIME_TRIGGER" -eq 0 ]; then
 fi
 
 # ============================================================================
-# PHASE 4: Check hard caps (20min cooldown, 5/day limit)
+# PHASE 4: Load remote config (cached locally, fallback to defaults)
 # ============================================================================
 
-# Cap 1: Min 20 minutes between quests (local optimization)
-TIME_SINCE_LAST_QUEST=$((CURRENT_TIME - LAST_QUEST_SHOWN))
-if [ "$TIME_SINCE_LAST_QUEST" -lt 1200 ]; then
+REMOTE_CONFIG_FILE="$HOME/.sidequest/remote-config.json"
+RC_ENABLED="true"
+RC_COOLDOWN_MINUTES=20
+RC_DAILY_CAP=5
+
+if [ -f "$REMOTE_CONFIG_FILE" ]; then
+  eval "$(python3 -c "
+import json, shlex, sys
+try:
+    with open(sys.argv[1]) as f:
+        rc = json.load(f)
+    print(f'RC_ENABLED={shlex.quote(str(rc.get(\"enabled\", True)).lower())}')
+    print(f'RC_COOLDOWN_MINUTES={int(rc.get(\"cooldown_minutes\", 20))}')
+    print(f'RC_DAILY_CAP={int(rc.get(\"daily_cap\", 5))}')
+except:
+    pass
+" "$REMOTE_CONFIG_FILE" 2>/dev/null)"
+fi
+
+# Kill switch: remote config can disable all quests globally
+if [ "$RC_ENABLED" = "false" ]; then
   exit 0
 fi
 
-# Cap 2: Max 5 quests per day
+# ============================================================================
+# PHASE 4.5: Check hard caps (remote-configurable cooldown and daily limit)
+# ============================================================================
+
+# Cap 1: Min cooldown between quests (default 20min = 1200s)
+RC_COOLDOWN_SECONDS=$((RC_COOLDOWN_MINUTES * 60))
+TIME_SINCE_LAST_QUEST=$((CURRENT_TIME - LAST_QUEST_SHOWN))
+if [ "$TIME_SINCE_LAST_QUEST" -lt "$RC_COOLDOWN_SECONDS" ]; then
+  exit 0
+fi
+
+# Cap 2: Max quests per day (default 5)
 TODAY=$(date +%Y-%m-%d)
 if [ "$DAILY_RESET_DATE" != "$TODAY" ]; then
   # New day — reset counter
   DAILY_QUEST_COUNT=0
   DAILY_RESET_DATE="$TODAY"
 fi
-if [ "$DAILY_QUEST_COUNT" -ge 5 ]; then
+if [ "$DAILY_QUEST_COUNT" -ge "$RC_DAILY_CAP" ]; then
   exit 0
 fi
 
