@@ -84,10 +84,10 @@ jobs:
         run: |
           aws s3 cp SideQuestApp-${{ env.VERSION }}.dmg \
             s3://${S3_BUCKET}/SideQuestApp-${{ env.VERSION }}.dmg \
-            --acl public-read
+            --content-type application/x-apple-diskimage
           aws s3 cp SideQuestApp-latest.dmg \
             s3://${S3_BUCKET}/SideQuestApp-latest.dmg \
-            --acl public-read
+            --content-type application/x-apple-diskimage
           echo "Uploaded versioned + latest DMG"
 
       - name: Update remote-config.json with new app version
@@ -108,7 +108,7 @@ jobs:
           print(json.dumps(cfg, indent=2))
           PYEOF
           aws s3 cp /tmp/config.json s3://${S3_BUCKET}/config.json \
-            --acl public-read --content-type application/json
+            --content-type application/json
 
       - name: Invalidate CloudFront
         run: |
