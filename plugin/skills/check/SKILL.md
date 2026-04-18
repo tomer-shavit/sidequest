@@ -1,9 +1,9 @@
 ---
-name: doctor
-description: "Full diagnostic check for SideQuest — verifies auth token, native app running, socket responding, API reachable, config valid, remote config cached, DND status. Use when the user asks 'sidequest doctor', 'diagnose sidequest', 'full check', 'why aren't quests working', 'debug my setup', or 'run diagnostics'."
+name: check
+description: "Full diagnostic check for SideQuest — verifies auth token, native app running, socket responding, API reachable, config valid, remote config cached, DND status. Use when the user asks 'sidequest check', 'check sidequest', 'full check', 'why aren't quests working', 'debug my setup', or 'run diagnostics'."
 ---
 
-# /sidequest:doctor
+# /sidequest:check
 
 Full diagnostic check for SideQuest with fix suggestions for every issue.
 
@@ -193,8 +193,8 @@ else:
 Present results as a diagnostic report:
 
 ```
-SideQuest Doctor
-════════════════
+SideQuest Check
+═══════════════
 
   Auth Token:    {status}
   Native App:    {status}
