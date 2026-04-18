@@ -58,8 +58,8 @@ enum SQMetric {
     static let defaultDuration: TimeInterval = 7.0
     static let stackGap:        CGFloat = 10
     static let stackMaxVisible: Int = 3
-    static let topInset:        CGFloat = 20
-    static let rightInset:      CGFloat = 20
+    static let topInset:        CGFloat = 48
+    static let rightInset:      CGFloat = 10
 }
 
 // MARK: - Fonts (bundled TTFs registered via SQFontLoader)

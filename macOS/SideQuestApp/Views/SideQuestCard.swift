@@ -82,7 +82,7 @@ struct SideQuestCard: View {
     private var paperBackground: some View {
         RoundedRectangle(cornerRadius: SQMetric.cardRadius, style: .continuous)
             .fill(SQColor.fantasyPaper)
-            .overlay(ParchmentDots().opacity(0.8))
+            .overlay(ParchmentDots())
             .clipShape(RoundedRectangle(cornerRadius: SQMetric.cardRadius, style: .continuous))
     }
 
@@ -373,8 +373,8 @@ private struct ParchmentDots: View {
     var body: some View {
         Canvas { ctx, size in
             let step: CGFloat = 6
-            let dot: CGFloat = 1.2
-            let color = SQColor.purple700.opacity(0.04)
+            let dot: CGFloat = 1.4
+            let color = SQColor.purple700.opacity(0.11)
             var y: CGFloat = 0
             while y < size.height {
                 var x: CGFloat = 0

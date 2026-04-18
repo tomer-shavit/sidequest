@@ -68,8 +68,14 @@ final class QuestPresenter: ObservableObject {
 
     func push(_ data: QuestData) {
         let quest = Quest(from: data)
-        // Insert newest at front (top of stack)
-        stack.insert(quest, at: 0)
+        // Show panel FIRST so SwiftUI renders insertion transition inside a visible window
+        if stack.isEmpty {
+            panelController.show(presenter: self)
+        }
+        // Insert newest at front (top of stack) — animate so .transition fires
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            stack.insert(quest, at: 0)
+        }
         displayStart[quest.id] = Date()
 
         // Fire quest_shown
@@ -82,11 +88,11 @@ final class QuestPresenter: ObservableObject {
              ])
         ErrorHandler.logQuestDisplay(quest.sourceQuestId)
 
-        // Show panel + register hotkeys if first card
+        // Register hotkeys if first card (panel was already shown above)
         if stack.count == 1 {
             hotkeyManager.register()
         }
-        panelController.show(presenter: self)
+        panelController.refresh(presenter: self)
         restartTopTimer()
     }
 
@@ -177,15 +183,23 @@ final class QuestPresenter: ObservableObject {
     // MARK: - Remove from stack
 
     private func remove(_ id: UUID) {
-        stack.removeAll { $0.id == id }
         displayStart[id] = nil
         hoverStates[id] = nil
+
+        // Animate stack mutation so .transition(removal:) fires (slide to right + fade)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            stack.removeAll { $0.id == id }
+        }
 
         if stack.isEmpty {
             dismissTimer?.invalidate()
             dismissTimer = nil
             hotkeyManager.unregister()
-            panelController.hide()
+            // Defer panel hide until exit transition completes (~0.35s covers spring settle)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                guard let self = self, self.stack.isEmpty else { return }
+                self.panelController.hide()
+            }
         } else {
             restartTopTimer()
             panelController.refresh(presenter: self)
