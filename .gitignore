@@ -20,3 +20,12 @@ build/
 Packages/
 Package.pins
 Package.resolved
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.mypy_cache/
