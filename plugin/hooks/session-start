@@ -352,5 +352,54 @@ fi
 
 GUIDANCE="SideQuest plugin installed but not authenticated. Run /sidequest:login to authenticate."
 
+# ══════════════════════════════════════════════════════════════════════════════
+# plugin_disabled detection + one-shot emit (DASH-06)
+# Privacy principle: ALL failures silent — never exit non-zero
+# ══════════════════════════════════════════════════════════════════════════════
+
+CONFIG_FILE_DISABLED="$HOME/.sidequest/config.json"
+STATE_FILE="$HOME/.sidequest/last-session-state.json"
+
+# Detect disabled state — multiple paths, any one trips it
+DISABLED=0
+if [ ! -d "$HOME/.sidequest" ]; then
+  DISABLED=1
+elif [ ! -f "$CONFIG_FILE_DISABLED" ]; then
+  DISABLED=1
+else
+  IS_ENABLED=$(jq -r '.enabled // true' "$CONFIG_FILE_DISABLED" 2>/dev/null || echo "true")
+  [ "$IS_ENABLED" = "false" ] && DISABLED=1
+fi
+
+if [ "$DISABLED" -eq 1 ]; then
+  # One-shot guard — only emit once per calendar day
+  TODAY=$(date +%Y-%m-%d 2>/dev/null || echo "")
+  LAST_EMIT=$(jq -r '.last_plugin_disabled_emit // ""' "$STATE_FILE" 2>/dev/null || echo "")
+
+  if [ -n "$TODAY" ] && [ "$LAST_EMIT" != "$TODAY" ]; then
+    UID_FROM_CFG=$(jq -r '.uid // empty' "$CONFIG_FILE_DISABLED" 2>/dev/null || echo "")
+    PREV_VERSION=$(jq -r '.plugin_version // empty' "$CONFIG_FILE_DISABLED" 2>/dev/null || echo "")
+
+    if [ -n "$UID_FROM_CFG" ]; then
+      # POST event — swallow all errors (curl timeout, network fail, 4xx, 5xx)
+      curl -s --max-time 5 -X POST "https://api.trysidequest.ai/events" \
+        -H "Content-Type: application/json" \
+        -d "{\"uid\":\"$UID_FROM_CFG\",\"event_type\":\"plugin_disabled\",\"metadata\":{\"reason\":\"disabled_via_config\",\"prev_version\":\"$PREV_VERSION\",\"date\":\"$TODAY\"}}" \
+        >/dev/null 2>&1 || true
+
+      # Update marker — silent on error (jq missing, disk full, permission)
+      if command -v jq >/dev/null 2>&1; then
+        TMP_STATE=$(mktemp 2>/dev/null || echo "/tmp/sq-state-$$")
+        jq --arg d "$TODAY" '. + {last_plugin_disabled_emit: $d, was_enabled: false}' \
+          "$STATE_FILE" 2>/dev/null > "$TMP_STATE" \
+          && mv "$TMP_STATE" "$STATE_FILE" 2>/dev/null \
+          || true
+        rm -f "$TMP_STATE" 2>/dev/null || true
+      fi
+    fi
+  fi
+fi
+
+# Privacy principle: hook must ALWAYS exit 0
 echo "$GUIDANCE" | json_output
 exit 0
