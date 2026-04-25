@@ -12,11 +12,14 @@ class WordPieceTokenizer {
   private let padToken = "[PAD]"
   private let maxTokens = 128
 
-  // Token IDs (from BERT base vocab)
-  private let clsId: Int = 1
-  private let sepId: Int = 102
-  private let padId: Int = 0
-  private var unkId: Int = 100  // Default; will be looked up from vocab
+  // Token IDs — looked up from vocab at init. Hardcoding fails on real BERT
+  // vocab where [CLS]=101 (vocab line 1 is [unused0], not [CLS]). Synthetic
+  // unit-test vocabs may place these at other indices, so dynamic lookup
+  // keeps both real and test paths correct.
+  private var clsId: Int = 101
+  private var sepId: Int = 102
+  private var padId: Int = 0
+  private var unkId: Int = 100
 
   /// Initializes tokenizer from a vocabulary file.
   /// - Parameters:
@@ -57,12 +60,16 @@ class WordPieceTokenizer {
 
     self.vocabDict = vocab
 
-    // Look up [UNK] token ID
-    if let unkTokenId = vocab[unkToken] {
-      self.unkId = unkTokenId
-    }
+    // Resolve special-token IDs from the vocab. Real BERT vocab has
+    // [CLS]=101, [SEP]=102, [UNK]=100, [PAD]=0; synthetic test vocabs may
+    // place them elsewhere. Falling back to the hardcoded defaults keeps
+    // older fixtures working while real-vocab parity stays correct.
+    if let id = vocab[clsToken] { self.clsId = id }
+    if let id = vocab[sepToken] { self.sepId = id }
+    if let id = vocab[padToken] { self.padId = id }
+    if let id = vocab[unkToken] { self.unkId = id }
 
-    ErrorHandler.logInfo("WordPieceTokenizer initialized: \(vocab.count) tokens")
+    ErrorHandler.logInfo("WordPieceTokenizer initialized: \(vocab.count) tokens (cls=\(clsId), sep=\(sepId), unk=\(unkId), pad=\(padId))")
   }
 
   /// Tokenizes text into fixed-length token sequence.
@@ -77,8 +84,11 @@ class WordPieceTokenizer {
     // Start with [CLS]
     tokens.append(clsId)
 
-    // Process text: split by whitespace, then apply greedy longest-match
-    let words = text.lowercased().split(separator: " ", omittingEmptySubsequences: true)
+    // BERT BasicTokenizer pipeline: lowercase → whitespace-split → split each
+    // whitespace token on punctuation. Without the punctuation step, "hello,"
+    // is looked up as one wordpiece (not "hello" + ","), which falls through
+    // to [UNK] and breaks parity with the reference HuggingFace tokenizer.
+    let words = basicTokenize(text)
 
     for word in words {
       if tokens.count >= maxLen - 1 { break }  // Reserve one for [SEP]
@@ -130,6 +140,63 @@ class WordPieceTokenizer {
     tokens = Array(tokens.prefix(maxLen))
 
     return (tokenIds: tokens, unkCount: unkCount)
+  }
+
+  /// BERT BasicTokenizer port: lowercase + Unicode-whitespace split + per-token
+  /// punctuation split. Matches HuggingFace `BertTokenizer(do_lower_case=True)`
+  /// pre-WordPiece pipeline closely enough for English developer text.
+  /// Accent-stripping + CJK char splitting are intentionally skipped — they
+  /// don't fire on the inputs this app handles.
+  private func basicTokenize(_ text: String) -> [String] {
+    let lowered = text.lowercased()
+    var result: [String] = []
+    var currentWhitespaceToken = ""
+
+    func flushWordWithPunctSplit() {
+      if currentWhitespaceToken.isEmpty { return }
+      var current = ""
+      for ch in currentWhitespaceToken {
+        if isPunctuation(ch) {
+          if !current.isEmpty {
+            result.append(current)
+            current = ""
+          }
+          result.append(String(ch))
+        } else {
+          current.append(ch)
+        }
+      }
+      if !current.isEmpty {
+        result.append(current)
+      }
+      currentWhitespaceToken = ""
+    }
+
+    for ch in lowered {
+      if ch.isWhitespace {
+        flushWordWithPunctSplit()
+      } else {
+        currentWhitespaceToken.append(ch)
+      }
+    }
+    flushWordWithPunctSplit()
+
+    return result
+  }
+
+  /// Matches BERT's `_is_punctuation`: ASCII non-alphanumeric punctuation
+  /// (codepoints 33-47, 58-64, 91-96, 123-126) ∪ Unicode `P*` category.
+  /// Swift's `Character.isPunctuation` covers Unicode P; the explicit ASCII
+  /// ranges add chars like `^`, `_`, `` ` ``, `~` that fall outside P but
+  /// BERT still treats as punctuation.
+  private func isPunctuation(_ char: Character) -> Bool {
+    guard let scalar = char.unicodeScalars.first else { return false }
+    let cp = scalar.value
+    if (cp >= 33 && cp <= 47) || (cp >= 58 && cp <= 64) ||
+       (cp >= 91 && cp <= 96) || (cp >= 123 && cp <= 126) {
+      return true
+    }
+    return char.isPunctuation
   }
 
   /// Computes [UNK] token rate for a token sequence.
