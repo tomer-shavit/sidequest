@@ -91,6 +91,7 @@ from sentence_transformers import SentenceTransformer
 SentenceTransformer(
     'sentence-transformers/all-MiniLM-L6-v2',
     revision='${MINILM_REVISION}',
+    device='cpu',
 )
 print('[build] checkpoint loaded')
 PYTHON
@@ -112,6 +113,7 @@ from transformers import AutoTokenizer
 model = SentenceTransformer(
     'sentence-transformers/all-MiniLM-L6-v2',
     revision='${MINILM_REVISION}',
+    device='cpu',
 )
 model.eval()
 
