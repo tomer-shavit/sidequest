@@ -250,11 +250,15 @@ else
   echo "[build] ERROR: GNU tar not found. Install with: brew install gnu-tar" >&2
   exit 1
 fi
+# `gzip -n` strips the embedded mtime + original-filename from the gzip
+# header (otherwise gzip stamps the current Unix timestamp into bytes 4-7,
+# making the tarball SHA256 vary per second between builds).
 "${TAR_BIN}" --sort=name \
     --mtime="${TAR_MTIME}" \
     --owner=0 --group=0 \
     --numeric-owner \
-    -czf "${TARBALL}" \
+    --use-compress-program="gzip -n" \
+    -cf "${TARBALL}" \
     "${MLMODELC}" \
     "${VOCAB}"
 
