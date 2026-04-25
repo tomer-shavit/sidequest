@@ -36,6 +36,16 @@
 		F18892C80213AF2477078F71 /* EmbeddingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8B3A23FD11303FA5AFD5678 /* EmbeddingModel.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		DF6DA4E862DC503CBD02BD78 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = H10001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E10001;
+			remoteInfo = SideQuestApp;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		15351A8D33FBB02202171BFC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		3762455F7405AC6EEC119977 /* EmbedParityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EmbedParityTests.swift; path = SideQuestAppTests/EmbedParityTests.swift; sourceTree = "<group>"; };
@@ -205,6 +215,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				34ED40F654CB82C4AE494F55 /* PBXTargetDependency */,
 			);
 			name = SideQuestAppTests;
 			productName = SideQuestAppTests;
@@ -317,11 +328,24 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		34ED40F654CB82C4AE494F55 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = SideQuestApp;
+			target = E10001 /* SideQuestApp */;
+			targetProxy = DF6DA4E862DC503CBD02BD78 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		A2BEF8E9497F9001473FF405 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleName = SideQuestAppTests;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "--deep";
 				PRODUCT_BUNDLE_IDENTIFIER = ai.sidequest.appTests;
 				PRODUCT_NAME = SideQuestAppTests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SideQuestApp.app/Contents/MacOS/SideQuestApp";
@@ -332,6 +356,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleName = SideQuestAppTests;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				OTHER_CODE_SIGN_FLAGS = "--deep";
 				PRODUCT_BUNDLE_IDENTIFIER = ai.sidequest.appTests;
 				PRODUCT_NAME = SideQuestAppTests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SideQuestApp.app/Contents/MacOS/SideQuestApp";
