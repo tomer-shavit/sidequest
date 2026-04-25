@@ -31,6 +31,15 @@ Installs the plugin into Claude Code, downloads the native macOS notification ap
 That's it. Quests appear when context says they're useful.
 
 > **Want to read the script before running it?** `curl https://get.trysidequest.ai/install.sh` (without piping to bash) prints the source. The same script also lives at [`scripts/install.sh`](scripts/install.sh) in this repo for GitHub-side audit.
+>
+> **Verify the bytes match the repo copy:**
+>
+> ```bash
+> curl -fsSL https://get.trysidequest.ai/install.sh | shasum -a 256
+> # Expect: d90c688ad4cb43b2b8282db30ae53a3e26b12d61127b143a329fef1efe38fa39
+> ```
+>
+> Hash above is for the current `scripts/install.sh` at HEAD on `main`. For a release-pinned check, compare against `git show plugin-vX.Y.Z:scripts/install.sh | shasum -a 256`.
 
 ---
 
