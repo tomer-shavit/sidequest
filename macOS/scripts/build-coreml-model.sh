@@ -75,7 +75,8 @@ command -v shasum >/dev/null 2>&1 || {
 
 # Verify Python deps are importable; surface a clear install hint if not.
 python3 - <<'PYTHON' || { echo "[build] ERROR: missing Python deps. Install with: pip install coremltools==8.1 torch==2.1.2 transformers==4.36.2 sentence-transformers==2.5.1" >&2; exit 1; }
-import importlib, sys
+import importlib.util
+import sys
 required = ["coremltools", "torch", "transformers", "sentence_transformers"]
 missing = [m for m in required if importlib.util.find_spec(m) is None]
 if missing:
