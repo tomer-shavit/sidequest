@@ -8,9 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		0920B02C16DFBE9853C81BCE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 15351A8D33FBB02202171BFC /* Foundation.framework */; };
+		0CD4912E35CF8850D591CAE7 /* SentencePieceTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B1822530BF7F169D8A866E3 /* SentencePieceTokenizer.swift */; };
 		2999D741B3345D93BA10CDC7 /* EmbedParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3762455F7405AC6EEC119977 /* EmbedParityTests.swift */; };
+		30D300625D90B5182ACC8C20 /* BenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309872DBA654675561338AAE /* BenchmarkTests.swift */; };
 		632331906DCC750B494222D0 /* EmbeddingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADF8EEFB98C16A8238B0E88B /* EmbeddingService.swift */; };
 		698053954BE4BBDD94E3D2FC /* InferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D5B821CDA019062689A566 /* InferenceTests.swift */; };
+		7A9A218595C1A9D1680243DD /* SentencePieceTokenizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D4B12F37B89DF5F0F635F3 /* SentencePieceTokenizerTests.swift */; };
 		8B872527AD467801BFDB522B /* EmbeddingInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAF4589668DED6CB402A2E1 /* EmbeddingInference.swift */; };
 		9E5AE21B57448E2E6866C619 /* ModelFetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63CB7169561FFB3CF317CB2 /* ModelFetchTests.swift */; };
 		A10001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001 /* App.swift */; };
@@ -33,6 +36,7 @@
 		A10030 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = B10030 /* Fonts */; };
 		B0B875A15CE33FBA2B6858A3 /* WordPieceTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5325B9B72976F83066B0FECD /* WordPieceTokenizer.swift */; };
 		B8917D0DEF378EA46BE18147 /* TokenizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B09813D6F928C346179330B2 /* TokenizerTests.swift */; };
+		BCD8274D2751B3DA9DEF9946 /* EmbeddingGemmaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8093CFBCC65682EDCD08B640 /* EmbeddingGemmaModel.swift */; };
 		F18892C80213AF2477078F71 /* EmbeddingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8B3A23FD11303FA5AFD5678 /* EmbeddingModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -48,9 +52,13 @@
 
 /* Begin PBXFileReference section */
 		15351A8D33FBB02202171BFC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		309872DBA654675561338AAE /* BenchmarkTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BenchmarkTests.swift; path = SideQuestAppTests/BenchmarkTests.swift; sourceTree = "<group>"; };
 		3762455F7405AC6EEC119977 /* EmbedParityTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EmbedParityTests.swift; path = SideQuestAppTests/EmbedParityTests.swift; sourceTree = "<group>"; };
+		40D4B12F37B89DF5F0F635F3 /* SentencePieceTokenizerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SentencePieceTokenizerTests.swift; path = SideQuestAppTests/SentencePieceTokenizerTests.swift; sourceTree = "<group>"; };
 		47D5B821CDA019062689A566 /* InferenceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InferenceTests.swift; path = SideQuestAppTests/InferenceTests.swift; sourceTree = "<group>"; };
 		5325B9B72976F83066B0FECD /* WordPieceTokenizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WordPieceTokenizer.swift; path = SideQuestApp/Models/WordPieceTokenizer.swift; sourceTree = "<group>"; };
+		7B1822530BF7F169D8A866E3 /* SentencePieceTokenizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SentencePieceTokenizer.swift; sourceTree = "<group>"; };
+		8093CFBCC65682EDCD08B640 /* EmbeddingGemmaModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EmbeddingGemmaModel.swift; sourceTree = "<group>"; };
 		ADF8EEFB98C16A8238B0E88B /* EmbeddingService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EmbeddingService.swift; path = SideQuestApp/Models/EmbeddingService.swift; sourceTree = "<group>"; };
 		B09813D6F928C346179330B2 /* TokenizerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TokenizerTests.swift; path = SideQuestAppTests/TokenizerTests.swift; sourceTree = "<group>"; };
 		B10001 /* App.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -128,6 +136,8 @@
 				C63CB7169561FFB3CF317CB2 /* ModelFetchTests.swift */,
 				47D5B821CDA019062689A566 /* InferenceTests.swift */,
 				3762455F7405AC6EEC119977 /* EmbedParityTests.swift */,
+				40D4B12F37B89DF5F0F635F3 /* SentencePieceTokenizerTests.swift */,
+				309872DBA654675561338AAE /* BenchmarkTests.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -150,6 +160,8 @@
 			children = (
 				B10003 /* QuestData.swift */,
 				B10023 /* Quest.swift */,
+				7B1822530BF7F169D8A866E3 /* SentencePieceTokenizer.swift */,
+				8093CFBCC65682EDCD08B640 /* EmbeddingGemmaModel.swift */,
 			);
 			name = Models;
 			path = Models;
@@ -295,6 +307,8 @@
 				9E5AE21B57448E2E6866C619 /* ModelFetchTests.swift in Sources */,
 				698053954BE4BBDD94E3D2FC /* InferenceTests.swift in Sources */,
 				2999D741B3345D93BA10CDC7 /* EmbedParityTests.swift in Sources */,
+				7A9A218595C1A9D1680243DD /* SentencePieceTokenizerTests.swift in Sources */,
+				30D300625D90B5182ACC8C20 /* BenchmarkTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -323,6 +337,8 @@
 				F18892C80213AF2477078F71 /* EmbeddingModel.swift in Sources */,
 				632331906DCC750B494222D0 /* EmbeddingService.swift in Sources */,
 				8B872527AD467801BFDB522B /* EmbeddingInference.swift in Sources */,
+				0CD4912E35CF8850D591CAE7 /* SentencePieceTokenizer.swift in Sources */,
+				BCD8274D2751B3DA9DEF9946 /* EmbeddingGemmaModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

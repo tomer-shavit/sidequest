@@ -32,17 +32,17 @@ class EmbedParityTests: XCTestCase {
 
       for (index, fixture) in fixtures.prefix(20).enumerated() {
         guard let userMsg = fixture["user_msg"] as? String,
-              let asst Msg = fixture["asst_msg"] as? String,
+              let asstMsg = fixture["asst_msg"] as? String,
               let expectedUserVec = fixture["expected_user_vec"] as? [Float],
-              let expectedAsst Vec = fixture["expected_asst_vec"] as? [Float] else {
+              let expectedAsstVec = fixture["expected_asst_vec"] as? [Float] else {
           continue
         }
 
         // Validate fixture dimension is 768-dim (v2.2 EmbeddingGemma)
         XCTAssertEqual(expectedUserVec.count, 768, "Fixture [\(index)]: user vector wrong dimension (expected 768, got \(expectedUserVec.count))")
-        XCTAssertEqual(expectedAsst Vec.count, 768, "Fixture [\(index)]: asst vector wrong dimension (expected 768, got \(expectedAsst Vec.count))")
+        XCTAssertEqual(expectedAsstVec.count, 768, "Fixture [\(index)]: asst vector wrong dimension (expected 768, got \(expectedAsstVec.count))")
 
-        // In real scenario: run CoreML inference on userMsg + asst Msg
+        // In real scenario: run CoreML inference on userMsg + asstMsg
         // For unit test: skip actual inference (requires model + tokenizer loaded)
         // This test structure validates the parity framework exists
 
