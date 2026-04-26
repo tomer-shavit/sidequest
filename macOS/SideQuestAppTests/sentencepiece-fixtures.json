@@ -1,0 +1,9 @@
+[
+  {
+    "_pending_real_tokens": true,
+    "_note": "Run 'python3 client/macOS/scripts/generate-tokenizer-fixtures.py' to populate real token IDs from HF transformers",
+    "text": "hello world",
+    "expected_token_ids": [],
+    "description": "basic english"
+  }
+]
