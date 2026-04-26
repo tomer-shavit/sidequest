@@ -29,16 +29,34 @@ actor EmbeddingGemmaModel {
   /// Attempts to load model from cache; fetches from S3 if not cached.
   /// Returns true on success, false on persistent failure.
   func loadOrFetch() async -> Bool {
+    let loadStartTime = Date()
+
     // Try cached first
     if let cached = tryLoadCached() {
       self.mlModel = cached
+      let warmLoadDuration = Date().timeIntervalSince(loadStartTime) * 1000
+      EmbeddingModelMetrics.shared.recordLatency(stage: "model_load_warm", durationMs: warmLoadDuration)
       return true
     }
 
     // Fetch from S3 if not cached
+    let fetchStartTime = Date()
     if await fetchFromS3() {
+      let fetchDuration = Date().timeIntervalSince(fetchStartTime) * 1000
+      EmbeddingModelMetrics.shared.recordLatency(stage: "first_launch_download", durationMs: fetchDuration)
+
+      let extractStartTime = Date()
       if let model = tryLoadCached() {
+        let extractDuration = Date().timeIntervalSince(extractStartTime) * 1000
+        EmbeddingModelMetrics.shared.recordLatency(stage: "first_launch_extract", durationMs: extractDuration)
+
+        let modelLoadStartTime = Date()
         self.mlModel = model
+        let modelLoadDuration = Date().timeIntervalSince(modelLoadStartTime) * 1000
+        EmbeddingModelMetrics.shared.recordLatency(stage: "first_launch_model_load", durationMs: modelLoadDuration)
+
+        let totalDuration = Date().timeIntervalSince(loadStartTime) * 1000
+        EmbeddingModelMetrics.shared.recordLatency(stage: "first_launch_total", durationMs: totalDuration)
         return true
       }
     }

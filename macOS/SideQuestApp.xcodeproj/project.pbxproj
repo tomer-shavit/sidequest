@@ -24,6 +24,7 @@
 		A10006 /* EventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10006 /* EventQueue.swift */; };
 		A10007 /* EventSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007 /* EventSyncManager.swift */; };
 		A10008 /* IPCListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008 /* IPCListener.swift */; };
+		A10009 /* EmbeddingModelMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10009 /* EmbeddingModelMetrics.swift */; };
 		A10010 /* StateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010 /* StateManager.swift */; };
 		A10012 /* MenuContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012 /* MenuContentView.swift */; };
 		A10020 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10020 /* DesignTokens.swift */; };
@@ -69,6 +70,7 @@
 		B10006 /* EventQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventQueue.swift; sourceTree = "<group>"; };
 		B10007 /* EventSyncManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventSyncManager.swift; sourceTree = "<group>"; };
 		B10008 /* IPCListener.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IPCListener.swift; sourceTree = "<group>"; };
+		B10009 /* EmbeddingModelMetrics.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EmbeddingModelMetrics.swift; sourceTree = "<group>"; };
 		B10010 /* StateManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StateManager.swift; sourceTree = "<group>"; };
 		B10012 /* MenuContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuContentView.swift; sourceTree = "<group>"; };
 		B10015 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				B10006 /* EventQueue.swift */,
 				B10007 /* EventSyncManager.swift */,
 				B10008 /* IPCListener.swift */,
+				B10009 /* EmbeddingModelMetrics.swift */,
 				B10010 /* StateManager.swift */,
 				B10024 /* QuestPanel.swift */,
 				B10025 /* QuestPresenter.swift */,
@@ -324,6 +327,7 @@
 				A10006 /* EventQueue.swift in Sources */,
 				A10007 /* EventSyncManager.swift in Sources */,
 				A10008 /* IPCListener.swift in Sources */,
+				A10009 /* EmbeddingModelMetrics.swift in Sources */,
 				A10010 /* StateManager.swift in Sources */,
 				A10012 /* MenuContentView.swift in Sources */,
 				A10020 /* DesignTokens.swift in Sources */,
