@@ -9,13 +9,13 @@
   <a href="#quests">Quests</a> ·
   <a href="#privacy">Privacy</a> ·
   <a href="BUILD.md">Verify Build</a> ·
-  <a href="https://github.com/tomer-shavit/sidequest/issues">Issues</a>
+  <a href="https://github.com/trySideQuest-ai/sidequest/issues">Issues</a>
 </p>
 
 <p align="center">
-  <img alt="License" src="https://img.shields.io/github/license/tomer-shavit/sidequest">
+  <img alt="License" src="https://img.shields.io/github/license/trySideQuest-ai/sidequest">
   <img alt="macOS" src="https://img.shields.io/badge/platform-macOS%2013%2B-blue">
-  <img alt="Plugin" src="https://img.shields.io/github/v/tag/tomer-shavit/sidequest?filter=plugin-v*&label=plugin">
+  <img alt="Plugin" src="https://img.shields.io/github/v/tag/trySideQuest-ai/sidequest?filter=plugin-v*&label=plugin">
 </p>
 
 SideQuest watches what you're working on inside Claude Code and surfaces one contextual dev-tool suggestion when it actually fits — a native macOS card you can dismiss with a keystroke, capped at 5 a day. No feed. No email. No LLM mediation. Conversation content stays on your machine; matching runs on anonymous IDs and on-device embeddings.
@@ -121,7 +121,7 @@ This repo publishes deterministic plugin tarballs and source-pinned macOS DMGs. 
 ## Support
 
 - Run `/sidequest:sq-status` for a self-diagnosis.
-- Open an [issue](https://github.com/tomer-shavit/sidequest/issues) for bugs or feature requests.
+- Open an [issue](https://github.com/trySideQuest-ai/sidequest/issues) for bugs or feature requests.
 - Email [71125175+tomer-shavit@users.noreply.github.com](mailto:71125175+tomer-shavit@users.noreply.github.com) for security disclosures (also see [SECURITY.md](SECURITY.md)).
 
 ## License

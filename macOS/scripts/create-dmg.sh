@@ -188,7 +188,7 @@ SUPPORT & FEEDBACK
 We'd love to hear your feedback during beta testing!
 
 Report issues or suggest improvements:
-  - GitHub Issues: https://github.com/sidequest-ai/sidequest/issues
+  - GitHub Issues: https://github.com/trySideQuest-ai/sidequest/issues
   - Email: support@trysidequest.ai
 
 Thank you for using SideQuest!

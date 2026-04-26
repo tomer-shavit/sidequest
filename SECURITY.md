@@ -44,4 +44,4 @@ There is no formal bug bounty program. We may credit responsible disclosures in 
 ## Contact
 
 - **Primary:** 71125175+tomer-shavit@users.noreply.github.com
-- **Public:** [GitHub Issues](https://github.com/tomer-shavit/sidequest/issues) — please use this only for non-security reports.
+- **Public:** [GitHub Issues](https://github.com/trySideQuest-ai/sidequest/issues) — please use this only for non-security reports.

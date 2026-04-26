@@ -93,7 +93,7 @@ Rollback procedures and incident response for the SideQuest public release pipel
 
 ## Supply-Chain Incident Response
 
-**Trigger:** Unauthorized commit to `tomer-shavit/sidequest`, or AWS credentials exposed, or malicious release asset detected.
+**Trigger:** Unauthorized commit to `trySideQuest-ai/sidequest`, or AWS credentials exposed, or malicious release asset detected.
 
 **Immediate actions (first 15 minutes):**
 
@@ -115,13 +115,13 @@ Rollback procedures and incident response for the SideQuest public release pipel
 
 3. Make the public repo private while investigating:
    ```bash
-   gh api --method PATCH repos/tomer-shavit/sidequest -f visibility=private
+   gh api --method PATCH repos/trySideQuest-ai/sidequest -f visibility=private
    ```
 
 4. Rotate all GitHub Secrets in the public repo:
    ```bash
-   gh secret list -R tomer-shavit/sidequest | awk '{print $1}' | \
-     xargs -I {} gh secret delete {} -R tomer-shavit/sidequest
+   gh secret list -R trySideQuest-ai/sidequest | awk '{print $1}' | \
+     xargs -I {} gh secret delete {} -R trySideQuest-ai/sidequest
    ```
 
 **Follow-up (next 24 hours):**

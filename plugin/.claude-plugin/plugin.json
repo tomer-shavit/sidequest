@@ -6,7 +6,7 @@
     "name": "SideQuest AI",
     "email": "hello@trysidequest.ai"
   },
-  "repository": "https://github.com/sidequest-ai/sidequest-plugin",
+  "repository": "https://github.com/trySideQuest-ai/sidequest",
   "license": "MIT",
   "skills": "./skills/"
 }
