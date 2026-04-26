@@ -135,6 +135,35 @@ Rollback procedures and incident response for the SideQuest public release pipel
 4. Re-create the OIDC role with tighter trust policy (limit to specific branch/tag pattern).
 5. Publish a post-mortem in `.planning/incidents/<date>-<slug>.md`.
 
+## v2.2 Schema Sunset (SCHEMA-03)
+
+After successful rollout of EmbeddingGemma-300m (768-dim) vectors, legacy 384-dim embedding infrastructure is sunset via SCHEMA-03 migration.
+
+**Timeline:**
+- Phase 23 ship (v2.2): Migration committed (dry-run-only), not applied
+- Days 1-7 post-ship: Observation window — OBS-02 CloudWatch metric tracks legacy traffic
+- Day 7+: If zero traffic confirmed ≥7 days, founder applies SCHEMA-03 manually
+- Post-apply: Legacy embedding column + index removed from prod RDS
+
+**What happens:**
+- `quest_embeddings.embedding vector(384)` column dropped
+- `idx_quest_embeddings_hnsw` legacy HNSW index dropped
+- `model_version` constraint tightened to single value
+- Legacy 384-dim routes no longer possible
+
+**Prerequisites for apply:**
+1. OBS-02 metric (`sidequest_api/LegacyVectorModelCount`) shows zero for ≥7 consecutive days
+2. E2E-03 coverage gate passes: ≥99% quests embedded with new model
+3. Zero schema errors in Lambda logs (no attempts to access dropped column)
+
+**How to apply (founder only):**
+```bash
+bash server/scripts/apply-schema-03-sunset.sh  # dry-run (default)
+DRY_RUN=false bash server/scripts/apply-schema-03-sunset.sh  # apply (only after gates pass)
+```
+
+See `.planning/V22-SUNSET-PLAYBOOK.md` for full operational runbook.
+
 ## Monitoring Signals
 
 Watch for these regression indicators after any release:
@@ -143,6 +172,7 @@ Watch for these regression indicators after any release:
 - **App crashes:** macOS Console.app filter `SideQuestApp` process for signal 11 / SIGABRT
 - **Install failures:** Surge in GitHub Issues on public repo tagged `install`
 - **API error rate:** CloudWatch Lambda `sidequest-api` 5xx > 1% of requests over 5 min window
+- **Embedding rollout health:** CloudWatch metric `sidequest_api/LegacyVectorModelCount` should be zero ≥7 days after v2.2 distribution (gate for SCHEMA-03 sunset)
 
 ## Contact
 
@@ -214,9 +244,12 @@ Vectors are privacy-forward, not privacy-perfect. Conversation text never leaves
 **Privacy implications:**
 - Larger vector space (768-dim vs 384-dim) increases the theoretical surface area for embedding-inversion attacks if vectors were compromised. However, the core mitigation (no plaintext logging) remains unchanged and eliminates this attack vector in practice.
 - Larger context window (1024 chars vs 500 chars) increases input to new attack class ALGEN (LLM-guided embedding reconstruction). Same mitigation applies: plaintext is never logged, and query vectors are ephemeral (single use, discarded after `/quest` call).
+- Threats GEIA (gradient extraction) and ALGEN (LLM-guided reconstruction) remain mitigated by the no-logging principle: server never sees plaintext, only numerical vectors discarded after `/quest` returns.
 
 **Verification:**
 - Automated privacy test (PRIVACY-02) ensures no accidental plaintext logging of user messages or vectors in server console paths. Runs on every deployment.
 - Monitoring: CloudWatch metrics `sidequest_api/LegacyVectorModelCount` (confirms all old 384-dim vectors replaced) and `sidequest_api/EmbeddingModelLoadFailure` (tracks app-side inference failures; if failures exceed 5% of active users, triggers investigation).
 
 **Residual risk:** Same as v2.1 — if server database is compromised, attacker has 768-dim vectors of public product descriptions. Inversion is computationally expensive (requires GPU cluster + days of training). No user conversation text is stored or leakable. Accepted as reasonable tradeoff for 10–15% accuracy improvement in quest matching.
+
+**Legacy model sunset:** After ≥7 days of zero 384-dim traffic post-v2.2 ship, SCHEMA-03 migration removes legacy embedding column and HNSW index from prod database. See "v2.2 Schema Sunset (SCHEMA-03)" section above for timeline and gates.
