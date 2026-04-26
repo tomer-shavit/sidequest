@@ -200,4 +200,23 @@ Vectors are now part of how we serve relevant tools to developers. They are deli
 
 ### Privacy Principle
 
-Vectors are privacy-forward, not privacy-perfect. Conversation text never leaves the device; what reaches the server is a 384-dim numerical fingerprint of the last message pair. Recovery is computationally expensive and the recovered content (marketing copy on the catalog side, ≤128 tokens of recent context on the query side) does not justify the cost. We accept this residual risk for v2.1 and re-assess annually.
+Vectors are privacy-forward, not privacy-perfect. Conversation text never leaves the device; what reaches the server is a numerical fingerprint of the last message pair. Recovery is computationally expensive and the recovered content (marketing copy on the catalog side, or recent message context on the query side) does not justify the cost. We accept this residual risk and re-assess annually.
+
+### v2.2 Vector Model Migration (Embedding Gemma 768-Dim)
+
+**Model upgrade:** v2.2 replaces the 384-dim MiniLM embedding model with a 768-dim EmbeddingGemma model, enabling higher-quality quest recommendations with a larger context window (256 tokens per side, ~1024 characters).
+
+**Impact on embeddings:**
+- Query vectors now 768-dim instead of 384-dim. Larger vector space increases semantic precision for matching quests to developer context.
+- Context window doubles from 128 → 256 tokens, capturing more developer conversation history for relevance matching.
+- Catalog vectors (public product descriptions) also re-embedded at 768-dim to maintain consistency with new query vector space.
+
+**Privacy implications:**
+- Larger vector space (768-dim vs 384-dim) increases the theoretical surface area for embedding-inversion attacks if vectors were compromised. However, the core mitigation (no plaintext logging) remains unchanged and eliminates this attack vector in practice.
+- Larger context window (1024 chars vs 500 chars) increases input to new attack class ALGEN (LLM-guided embedding reconstruction). Same mitigation applies: plaintext is never logged, and query vectors are ephemeral (single use, discarded after `/quest` call).
+
+**Verification:**
+- Automated privacy test (PRIVACY-02) ensures no accidental plaintext logging of user messages or vectors in server console paths. Runs on every deployment.
+- Monitoring: CloudWatch metrics `sidequest_api/LegacyVectorModelCount` (confirms all old 384-dim vectors replaced) and `sidequest_api/EmbeddingModelLoadFailure` (tracks app-side inference failures; if failures exceed 5% of active users, triggers investigation).
+
+**Residual risk:** Same as v2.1 — if server database is compromised, attacker has 768-dim vectors of public product descriptions. Inversion is computationally expensive (requires GPU cluster + days of training). No user conversation text is stored or leakable. Accepted as reasonable tradeoff for 10–15% accuracy improvement in quest matching.
