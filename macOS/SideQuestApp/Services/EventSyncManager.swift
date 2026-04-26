@@ -8,6 +8,24 @@ class EventSyncManager {
     private let syncIntervalSeconds = 30.0
     private let logger = Logger(subsystem: "ai.sidequest.app", category: "event-sync")
 
+    enum SyncResult {
+        case success
+        case dropPermanent
+        case retry
+        case authBroken
+    }
+
+    private func classify(_ response: HTTPURLResponse?, error: Error?) -> SyncResult {
+        if error != nil { return .retry }
+        guard let r = response else { return .retry }
+        switch r.statusCode {
+        case 200...299: return .success
+        case 401:       return .authBroken
+        case 400...499: return .dropPermanent
+        default:        return .retry
+        }
+    }
+
     init(apiClient: APIClient, eventQueue: EventQueue) {
         self.apiClient = apiClient
         self.eventQueue = eventQueue
@@ -55,8 +73,8 @@ class EventSyncManager {
             return
         }
 
-        // Send events one at a time (server expects individual events, not arrays)
         var successCount = 0
+        var droppedCount = 0
         for event in events {
             let payload: [String: Any] = {
                 var dict: [String: Any] = [
@@ -71,6 +89,8 @@ class EventSyncManager {
                 return dict
             }()
 
+            var response: HTTPURLResponse?
+            var error: Error?
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: payload)
 
@@ -83,25 +103,33 @@ class EventSyncManager {
 
                 let bearerToken = await apiClient.getBearerToken()
                 request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-
                 request.httpBody = jsonData
 
-                let (_, response) = try await URLSession.shared.data(for: request)
+                let (_, urlResponse) = try await URLSession.shared.data(for: request)
+                response = urlResponse as? HTTPURLResponse
+            } catch let postError {
+                error = postError
+            }
 
-                if let httpResponse = response as? HTTPURLResponse,
-                   (200...299).contains(httpResponse.statusCode) {
-                    successCount += 1
-                }
-            } catch {
-                // Network error — stop trying, will retry next cycle
-                break
+            switch classify(response, error: error) {
+            case .success:
+                await eventQueue.remove(event)
+                successCount += 1
+            case .dropPermanent:
+                await eventQueue.remove(event)
+                droppedCount += 1
+                ErrorHandler.log("Dropped event \(event.eventId): permanent (HTTP \(response?.statusCode ?? -1))", level: .warning)
+            case .retry:
+                continue
+            case .authBroken:
+                await eventQueue.pause()
+                ErrorHandler.log("Event sync paused: auth broken (HTTP 401)", level: .error)
+                return
             }
         }
 
-        if successCount > 0 {
-            let syncTime = Date()
-            await eventQueue.clearEvents(after: syncTime)
-            ErrorHandler.logInfo("Events synced successfully (\(successCount)/\(events.count) events)")
+        if successCount > 0 || droppedCount > 0 {
+            ErrorHandler.logInfo("Events synced (success=\(successCount) dropped=\(droppedCount) total=\(events.count))")
         }
     }
 

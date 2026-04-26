@@ -95,6 +95,7 @@ struct QueueState: Codable {
 actor EventQueue {
     private let queueFilePath: URL
     private let maxQueueSize = 1000
+    private var paused = false
 
     init(queueFileName: String = "events-queue.json") {
         // Path: ~/Library/Application Support/SideQuest/events-queue.json
@@ -144,11 +145,30 @@ actor EventQueue {
         writeQueue(state)
     }
 
-    // Get all pending events from queue
+    // Get all pending events from queue. Returns empty when paused (auth-broken).
     func getPendingEvents() -> [QuestEvent] {
+        if paused { return [] }
         let state = readQueue()
         return state.events
     }
+
+    // Remove a single event by id after successful (or permanent-failure) sync.
+    func remove(_ event: QuestEvent) {
+        var state = readQueue()
+        state.events.removeAll { $0.eventId == event.eventId }
+        state.pendingCount = state.events.count
+        writeQueue(state)
+    }
+
+    // Pause sync after a 401 — getPendingEvents returns []. Lifts on app restart.
+    func pause() {
+        if !paused {
+            paused = true
+            ErrorHandler.logInfo("Event queue paused (auth broken — re-auth required)")
+        }
+    }
+
+    func isPaused() -> Bool { paused }
 
     // Clear events after successful sync
     func clearEvents(after syncTime: Date? = nil) {
