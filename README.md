@@ -122,7 +122,6 @@ This repo publishes deterministic plugin tarballs and source-pinned macOS DMGs. 
 
 - Run `/sidequest:sq-status` for a self-diagnosis.
 - Open an [issue](https://github.com/trySideQuest-ai/sidequest/issues) for bugs or feature requests.
-- Email [71125175+tomer-shavit@users.noreply.github.com](mailto:71125175+tomer-shavit@users.noreply.github.com) for security disclosures (also see [SECURITY.md](SECURITY.md)).
 
 ## License
 
