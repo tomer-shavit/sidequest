@@ -230,9 +230,17 @@ class IPCListener {
         let box = EmbeddingResultBox()
         let semaphore = DispatchSemaphore(value: 0)
 
+        // Gemma was trained with task-specific prefix wrappers. Without them
+        // cosine distances saturate and ranking degrades. Both user_msg and
+        // asst_msg are used to retrieve quests, so both get the query prefix.
+        // Doc-side equivalent ("title: ... | text: ...") lives in the embed
+        // scripts that populate quest_embeddings.
+        let userPrefixed = "task: search result | query: \(userMsg)"
+        let asstPrefixed = "task: search result | query: \(asst_msg)"
+
         Task {
-            async let userVec = service.embedText(userMsg)
-            async let asstVec = service.embedText(asst_msg)
+            async let userVec = service.embedText(userPrefixed)
+            async let asstVec = service.embedText(asstPrefixed)
             let (u, a) = await (userVec, asstVec)
             box.set(user: u, asst: a)
             semaphore.signal()
