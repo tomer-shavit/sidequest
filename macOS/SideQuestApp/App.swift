@@ -1,19 +1,25 @@
 import SwiftUI
+import AppKit
 
 @main
 struct SideQuestApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    private static let menubarIcon: NSImage = {
+        let img = NSImage(named: "menubar-icon") ?? NSImage(
+            systemSymbolName: "sparkles",
+            accessibilityDescription: "SideQuest"
+        )!
+        img.isTemplate = true
+        img.size = NSSize(width: 18, height: 18)
+        return img
+    }()
+
     var body: some Scene {
         MenuBarExtra {
             MenuContentView(appDelegate: appDelegate)
         } label: {
-            Image("menubar-icon")
-                .resizable()
-                .renderingMode(.original)
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: 22, height: 22)
+            Image(nsImage: Self.menubarIcon)
                 .help("SideQuest — Quest notifications")
         }
         .menuBarExtraStyle(.menu)
