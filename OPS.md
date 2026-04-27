@@ -62,7 +62,7 @@ Rollback procedures and incident response for the SideQuest public release pipel
 
 4. Bump `remote-config.json`'s `app_version` to the reverted version so the update-available banner stops nagging users.
 
-5. Message pilot channel: "Rolled back to v1.8.0. Run `/sidequest:reinstall` to reinstall the stable app."
+5. Notify users that they should run `/sidequest:sq-update` (or `/sidequest:reinstall`) to pick up the rolled-back app.
 
 ### Scenario 3: Bad install.sh
 
@@ -70,10 +70,9 @@ Rollback procedures and incident response for the SideQuest public release pipel
 
 **Mitigation:**
 
-1. Restore from the private monorepo:
+1. Restore the previous `install.sh` from version control and re-deploy:
    ```bash
-   cd /Users/tomershavit/sidequest-ai
-   git log --oneline scripts/install.sh | head -5
+   git log --oneline -- scripts/install.sh | head -5
    git checkout <good-sha> -- scripts/install.sh
    ```
 
@@ -128,12 +127,12 @@ Rollback procedures and incident response for the SideQuest public release pipel
 
 1. Audit `git log --all` on public repo for unexpected authors or commits.
 2. Review CloudTrail for AWS IAM activity in the incident window.
-3. Notify pilot users via Slack `#sidequest-pilot` and beta email with:
+3. Notify users with:
    - What happened
    - Whether they need to take action
    - When service will resume
 4. Re-create the OIDC role with tighter trust policy (limit to specific branch/tag pattern).
-5. Publish a post-mortem in `.planning/incidents/<date>-<slug>.md`.
+5. Publish a post-mortem.
 
 ## v2.2 Schema Sunset (SCHEMA-03)
 
@@ -162,7 +161,7 @@ bash server/scripts/apply-schema-03-sunset.sh  # dry-run (default)
 DRY_RUN=false bash server/scripts/apply-schema-03-sunset.sh  # apply (only after gates pass)
 ```
 
-See `.planning/V22-SUNSET-PLAYBOOK.md` for full operational runbook.
+The full sunset playbook is maintained internally; only the gates and apply procedure above are required to coordinate with downstream consumers.
 
 ## Monitoring Signals
 
@@ -176,9 +175,8 @@ Watch for these regression indicators after any release:
 
 ## Contact
 
-- Primary on-call: 71125175+tomer-shavit@users.noreply.github.com
-- Escalation: co-founder (same channel)
-- Pilot user channel: Slack `#sidequest-pilot`
+- **Security issues:** see [SECURITY.md](SECURITY.md) — use GitHub Security Advisories.
+- **Other issues:** [GitHub Issues](https://github.com/trySideQuest-ai/sidequest/issues).
 
 ## Embedding Vector Privacy & Security
 
@@ -204,7 +202,7 @@ Vectors are now part of how we serve relevant tools to developers. They are deli
 **Immediate actions:**
 
 1. Identify scope:
-   - Catalog vectors only → low impact (vectors of public product descriptions). Document in `.planning/incidents/<date>-<slug>.md` and continue operations.
+   - Catalog vectors only → low impact (vectors of public product descriptions). Record an internal post-mortem and continue operations.
    - User query vectors → these are ephemeral by design and should never appear in any backup. If they do, treat as a serious bug.
 
 2. If catalog vectors only:
@@ -214,7 +212,7 @@ Vectors are now part of how we serve relevant tools to developers. They are deli
 3. If query vectors are found anywhere persistent:
    - **Stop.** Audit the request handler for accidental logging or caching paths.
    - Rotate any backups created during the affected window.
-   - Notify pilot users in Slack `#sidequest-pilot`: "We found a path that may have written ephemeral vectors to disk. Vectors carry less information than plaintext, but we have removed the path and rotated affected storage. No action needed on your side."
+   - Disclose to affected users: "We found a path that may have written ephemeral vectors to disk. Vectors carry less information than plaintext, but we have removed the path and rotated affected storage. No action needed on your side."
 
 4. Post-mortem:
    - Root cause: what allowed the vectors to be persisted? (verbose logging, missing redaction, framework default).

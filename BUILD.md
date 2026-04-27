@@ -6,22 +6,21 @@ This guide allows you to audit the SideQuest plugin and macOS app source code an
 
 **System Requirements:**
 - macOS 14.0 or later
-- Xcode 15.2 or later (Command Line Tools sufficient for plugin, full Xcode required for app)
+- Xcode 15.3 or later (Command Line Tools sufficient for plugin, full Xcode required for app)
 - Git 2.36 or later
 - Bash 5.0 or later
 
 **Check your versions:**
 ```bash
 sw_vers                          # macOS version
-xcodebuild -version              # Xcode version (should show 15.2+)
+xcodebuild -version              # Xcode version (should show 15.3+)
 git --version                    # Git version
 bash --version                   # Bash version
 ```
 
 **Optional Tools for Verification:**
 - `shasum` (built-in on macOS)
-- `codesign` (built-in with Xcode, for app signature verification)
-- `spctl` (built-in on macOS, for Gatekeeper/notarization verification)
+- `codesign` (built-in with Xcode, for inspecting the app's ad-hoc signature)
 
 ---
 
@@ -88,37 +87,38 @@ If they match, the plugin binary was built faithfully from the published source.
 
 ### macOS App DMG
 
-The SideQuest app is a native macOS application built with Xcode. Code signing and notarization are performed by Apple's infrastructure.
+The SideQuest app is a native macOS application built with Xcode. The CI workflow currently builds and ships the app with **ad-hoc signing** (no Apple Developer ID, no notarization). On first launch users must right-click → Open to bypass Gatekeeper.
 
 **1. Clone at Release Tag**
 
 ```bash
-git clone --depth 1 --branch app-v1.8.0 https://github.com/trySideQuest-ai/sidequest.git
+git clone --depth 1 --branch app-v2.2.4 https://github.com/trySideQuest-ai/sidequest.git
 cd sidequest
 ```
 
 **2. Build the App**
 
-The app requires Xcode (full IDE, not just Command Line Tools):
+The app requires Xcode (full IDE, not just Command Line Tools). The CI workflow uses Xcode 15.3 with ad-hoc signing:
 
 ```bash
 cd macOS
-
-# Build archive
-xcodebuild \
-  -scheme SideQuestApp \
+xcodebuild -scheme SideQuestApp \
   -configuration Release \
-  -derivedDataPath build \
-  archive
+  -derivedDataPath build/DerivedData \
+  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGN_STYLE=Automatic \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=YES \
+  build
 
-# Create DMG from archive
-cd ..
-./macOS/scripts/create-dmg.sh
+# Package into DMG
+APP_PATH="build/DerivedData/Build/Products/Release/SideQuestApp.app"
+bash scripts/create-dmg.sh "$APP_PATH" "SideQuestApp-2.2.4.dmg"
 ```
 
 Expected output:
 ```
-dist/SideQuestApp-1.8.0.dmg (size ~50-80MB)
+SideQuestApp-2.2.4.dmg (size ~1.5-2 MB)
 ```
 
 **3. Compute SHA256 of Local Build**
@@ -130,8 +130,8 @@ shasum -a 256 dist/SideQuestApp-*.dmg
 
 **4. Verify Against GitHub Release**
 
-1. Navigate to https://github.com/trySideQuest-ai/sidequest/releases/tag/app-v1.8.0
-2. Find the DMG SHA256 in Release Notes
+1. Navigate to the release page on GitHub for the tag you cloned (`app-v<version>`).
+2. Find the DMG SHA256 in the Release Notes.
 3. Compare:
 
 ```bash
@@ -141,41 +141,19 @@ echo "Got:      abc123def456..."
 
 ---
 
-## Verifying Code Signatures and Notarization
+## Inspecting the App Signature
 
-SideQuest app binaries are code-signed and notarized by Apple. You can verify the signatures locally:
-
-### Verify Code Signature
+The CI workflow currently signs the app **ad-hoc** (no Apple Developer ID, no notarization). You can confirm this:
 
 ```bash
-# Download the DMG from GitHub Releases
-curl -L -o SideQuestApp-1.8.0.dmg \
-  https://github.com/trySideQuest-ai/sidequest/releases/download/app-v1.8.0/SideQuestApp-1.8.0.dmg
-
-# Mount the DMG
-hdiutil mount SideQuestApp-1.8.0.dmg
-
-# Verify the signature (detailed output)
-codesign -vv --deep --strict /Volumes/SideQuestApp/SideQuestApp.app
-
-# Expected output (last line): valid on disk
+# Mount the DMG, then:
+codesign -dvv /Volumes/SideQuestApp/SideQuestApp.app
+# Expected: "Signature=adhoc"
 ```
 
-If signature is invalid, the app has been tampered with after release.
+Because the app is ad-hoc signed, macOS Gatekeeper will block it on first launch. To run it, right-click the app and choose **Open**, then confirm the prompt. This is the same flow other open-source macOS apps use when they ship without a paid Developer ID.
 
-### Verify Notarization Status
-
-Notarization confirms the app was scanned by Apple for malware:
-
-```bash
-# Verify notarization (requires Xcode Command Line Tools)
-spctl -a -t exec -vvv /Volumes/SideQuestApp/SideQuestApp.app
-
-# Expected output includes "accepted" and shows the notarization ticket date
-# Example: accepted source=Notarized Developer ID
-```
-
-If notarization check fails, the app cannot be safely launched on other Macs (Gatekeeper will block it).
+The repository contains `macOS/scripts/build-and-sign.sh` and `macOS/scripts/notarize.sh` for Developer-ID + notarization, but they are not invoked by the CI workflow today.
 
 ---
 
@@ -196,23 +174,11 @@ Two builds of the same tagged version should produce identical SHA256 hashes.
 
 The macOS app build uses:
 
-- **Xcode version:** Pinned to 15.2 via `.xcode-version` file
-- **Build configuration:** Release (optimized, code-signed)
-- **Deterministic timestamps:** `SOURCE_DATE_EPOCH` environment variable set to commit timestamp
-- **Code signing identity:** Apple Developer ID (read from Xcode project settings)
+- **Xcode version:** Pinned to 15.3 via `.xcode-version`
+- **Build configuration:** Release
+- **Code signing:** Ad-hoc only (`CODE_SIGN_IDENTITY="-"`)
 
-Note: macOS app binaries cannot be made byte-identical due to Apple's notarization chain and timestamps embedded by the compiler. However, the plugin tarball can be reproduced exactly.
-
-### Environment Variables Used
-
-```bash
-# Set automatically during build
-export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
-export TZ=UTC
-export ZERO_AR_DATE=1  # macOS archiver determinism
-```
-
-These ensure consistent timestamps across builds.
+Note: macOS app binaries are not byte-reproducible — Xcode embeds non-deterministic timestamps and the ad-hoc signature changes per build. Verify the DMG via SHA256 of the distribution artifact published in the Release Notes. The plugin tarball, by contrast, is reproducible.
 
 ---
 
@@ -228,7 +194,10 @@ These ensure consistent timestamps across builds.
 - macOS ships with BSD tar; install GNU tar via Homebrew:
   ```bash
   brew install gnu-tar
-  export PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
+  # Apple Silicon
+  export PATH="/opt/homebrew/opt/gnu-tar/libexec/gnubin:$PATH"
+  # Intel Macs
+  # export PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
   ```
 
 ### App Build Fails
@@ -237,14 +206,13 @@ These ensure consistent timestamps across builds.
 - Install Xcode: `xcode-select --install`
 - Or launch Xcode from `/Applications/` at least once
 
-**Error: `Xcode 15.2 not found` (if using different version)**
+**Error: `Xcode 15.3 not found` (if using a different version)**
 - Pinned Xcode version may not be available on your system
 - Edit `.xcode-version` to your installed version (e.g., `16.0`)
-- Note: reproducibility is best-effort with different Xcode versions
+- Note: cross-version Xcode builds may produce different binaries
 
 **Error: `Code signing failed`**
-- Only Apple Developer ID credentials can sign the app
-- For local builds, use ad-hoc signing (remove signing requirements for testing)
+- The CI build uses ad-hoc signing — pass `CODE_SIGN_IDENTITY="-"` and the related flags shown in the build command above.
 
 ### SHA256 Mismatch
 
@@ -264,45 +232,38 @@ These ensure consistent timestamps across builds.
 
 ### What This Verification Proves
 
-✓ The published binary was built from the source code at the tagged commit  
-✓ The binary has not been tampered with since release  
-✓ The macOS app is signed and notarized by Apple  
-✓ The plugin tarball is packaged deterministically  
+✓ The published plugin tarball SHA256 matches a deterministic build of the tagged source  
+✓ The DMG SHA256 matches what was uploaded by CI for the tagged release  
+✓ The app is ad-hoc signed (no third-party Developer ID involved)  
 
 ### What This Verification Does NOT Prove
 
 ✗ The source code is secure or bug-free (code review is separate)  
 ✗ The binary is free from all vulnerabilities  
-✗ Future builds will be identical (toolchain updates may affect results)  
+✗ The macOS app has been notarized by Apple — it has not  
+✗ Future builds will be byte-identical (toolchain updates may affect results)  
 
-For security concerns, open an issue on GitHub or contact 71125175+tomer-shavit@users.noreply.github.com.
+For security concerns, see [SECURITY.md](SECURITY.md).
 
 ---
 
 ## FAQ
 
 **Q: Can I install the app I built locally?**
-A: Yes. Mount the DMG and drag SideQuestApp.app to /Applications. Verify signature and notarization as described above before running.
+A: Yes. Mount the DMG and drag SideQuestApp.app to /Applications. Because the build is ad-hoc signed, on first launch right-click the app and choose **Open** to bypass Gatekeeper.
 
 **Q: Will my locally-built plugin work with the Claude CLI?**
 A: Yes. Extract the tarball and follow the installation instructions in the main README.md.
 
 **Q: Why is the macOS app not byte-identical after rebuild?**
-A: Xcode and Apple's notarization chain embed non-deterministic timestamps. However, the binary is verifiable via signature and SHA256 of the distribution artifact (DMG file).
+A: Xcode embeds non-deterministic timestamps in the binary, and the ad-hoc signature changes per build. The DMG SHA256 published in the Release Notes is the canonical artifact to compare against.
 
 **Q: What if I don't trust GitHub Releases SHA256 links?**
-A: Clone the repo and verify signatures directly via `codesign` and `spctl` on the installed app. This proves Apple notarized the code.
+A: Clone the repo, build from the tagged source yourself, and compare the resulting plugin tarball SHA256 to the value in the Release Notes. The plugin build is reproducible across machines.
 
 ---
 
 ## References
 
-- [Reproducible Builds](https://reproducible-builds.org/) — Archive metadata standards, SOURCE_DATE_EPOCH spec
+- [Reproducible Builds](https://reproducible-builds.org/) — Archive metadata standards
 - [GNU tar Manual: Making Archives More Reproducible](https://www.gnu.org/software/tar/manual/html_section/Reproducibility.html)
-- [macOS Code Signing and Notarization](https://gist.github.com/rsms/929c9c2fec231f0cf843a1a746a416f5)
-- [WWDC 2019 Session 703: All About Notarization](https://developer.apple.com/videos/play/wwdc2019/703/)
-
----
-
-**Last updated:** 2026-04-18  
-**Valid for releases:** v0.2.0 (plugin) and v1.8.0 (app) and later, following the same patterns

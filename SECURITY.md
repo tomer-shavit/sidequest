@@ -2,9 +2,9 @@
 
 ## Reporting a Vulnerability
 
-If you find a security issue in the SideQuest plugin or native app, please **do not open a public GitHub issue**. Instead, email:
+If you find a security issue in the SideQuest plugin or native app, please **do not open a public GitHub issue**.
 
-**71125175+tomer-shavit@users.noreply.github.com** — subject line: `SECURITY: SideQuest`
+Use [GitHub's private vulnerability reporting](https://github.com/trySideQuest-ai/sidequest/security/advisories/new) (the **Security** tab → **Report a vulnerability**).
 
 Include:
 
@@ -14,15 +14,9 @@ Include:
 - A proof-of-concept if one exists.
 - Whether you would like credit in the disclosure (and how to attribute).
 
-## Disclosure Window
+## Response
 
-We aim to:
-
-- Acknowledge reports within **3 business days**.
-- Triage and assign severity within **7 days**.
-- Ship a fix or document a mitigation within **90 days**.
-
-If we cannot meet the 90-day window, we will tell you why and propose a new timeline.
+This project is maintained by a small team. We will respond to reports as quickly as we can but do not commit to a fixed SLA. If we cannot fix an issue, we will explain why.
 
 ## Scope
 
@@ -34,14 +28,9 @@ Security reports are accepted for code in this repository:
 
 Out of scope (please report to the relevant project instead):
 
-- Vulnerabilities in third-party dependencies (please report to the upstream maintainer; we will accept a heads-up so we can pin a fix).
-- Issues in the SideQuest API or landing pages — those live in the private monorepo and have their own disclosure path; you can report them to the same email.
+- Vulnerabilities in third-party dependencies — please report to the upstream maintainer; a heads-up here is welcome so we can pin a fix.
+- Issues in the SideQuest API or landing pages — those live in a private repository and have their own disclosure path.
 
 ## Bug Bounty
 
-There is no formal bug bounty program. We may credit responsible disclosures in release notes if you want.
-
-## Contact
-
-- **Primary:** 71125175+tomer-shavit@users.noreply.github.com
-- **Public:** [GitHub Issues](https://github.com/trySideQuest-ai/sidequest/issues) — please use this only for non-security reports.
+There is no bug bounty program. We may credit responsible disclosures in release notes if you want.

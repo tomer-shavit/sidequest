@@ -4,5 +4,5 @@ contact_links:
     url: "https://github.com/trySideQuest-ai/sidequest"
     about: "Use /sidequest:sq-feedback inside Claude Code for fastest routing of relevance feedback."
   - name: Security disclosures
-    url: "https://github.com/trySideQuest-ai/sidequest/blob/main/SECURITY.md"
-    about: "Please email 71125175+tomer-shavit@users.noreply.github.com for security issues. Do not file a public issue."
+    url: "https://github.com/trySideQuest-ai/sidequest/security/advisories/new"
+    about: "Report security issues privately via GitHub Security Advisories. Do not file a public issue."
