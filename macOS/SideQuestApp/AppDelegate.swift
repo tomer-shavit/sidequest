@@ -132,52 +132,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate {
-    /// Loads the CoreML model + matching vocab, constructs the embedding
-    /// pipeline, plumbs it into the IPC listener so stop-hook IPC requests
-    /// can answer with real 384-dim vectors.
+    /// Loads EmbeddingGemma-300M CoreML model + SentencePiece BPE tokenizer,
+    /// composes them into an EmbeddingService, plumbs into the IPC listener
+    /// so stop-hook IPC requests can answer with 768-dim L2-normalized vectors.
     ///
-    /// Order matters and is verified at each step:
-    ///   1. EmbeddingModel.loadOrFetch downloads + extracts the tarball.
-    ///      That populates the cache dir with both the .mlmodelc directory
-    ///      and the matching vocab.txt — they ship together so vocab
-    ///      indices stay version-locked to the traced model.
-    ///   2. WordPieceTokenizer reads vocab from the same cache dir. SHA
-    ///      check is skipped because the tarball-level SHA already
-    ///      verified both files atomically.
-    ///   3. EmbeddingService composes tokenizer + model + inference and
-    ///      becomes the IPC listener's vector source.
+    /// Pipeline:
+    ///   1. EmbeddingGemmaModel.loadOrFetch downloads + extracts the tarball,
+    ///      which contains both the .mlmodelc directory AND tokenizer assets
+    ///      (tokenizer.json + tokenizer_config.json). They ship together so
+    ///      vocab + merges stay version-locked to the traced model.
+    ///   2. SentencePieceTokenizer reads tokenizer.json from the same dir.
+    ///   3. GemmaBackend wraps inference; EmbeddingService composes all three.
     ///
     /// Any failure leaves embeddingService nil and IPC stays in
     /// null-vector mode — server falls back to tag-only quest selection.
     /// Never crashes the app on embedding failure (privacy/UX principle).
     private func bootstrapEmbeddingService() async {
-        let model = EmbeddingModel()
+        let model = EmbeddingGemmaModel()
 
         let loaded = await model.loadOrFetch()
         guard loaded else {
-            ErrorHandler.logInfo("Embedding bootstrap: model not available; IPC stays in null-vector mode")
+            ErrorHandler.logInfo("Embedding bootstrap: Gemma model not available; IPC stays in null-vector mode")
             return
         }
 
-        let tokenizer: WordPieceTokenizer
+        let tokenizer: SentencePieceTokenizer
         do {
-            tokenizer = try WordPieceTokenizer(bundleVocabPath: model.vocabPath)
+            tokenizer = try SentencePieceTokenizer(tokenizerJSONPath: model.tokenizerJSONPath)
         } catch {
-            ErrorHandler.logInfo("Embedding bootstrap: tokenizer init failed: \(error)")
+            ErrorHandler.logInfo("Embedding bootstrap: SentencePiece tokenizer init failed: \(error)")
             return
         }
 
-        let inference = EmbeddingInference()
-        let service = EmbeddingService(
-            tokenizer: tokenizer,
-            model: model,
-            inference: inference
-        )
+        let backend = GemmaBackend(model: model)
+        let service = EmbeddingService(tokenizer: tokenizer, backend: backend)
 
         await MainActor.run {
             self.embeddingService = service
             self.ipcListener?.setEmbeddingService(service)
-            ErrorHandler.logInfo("Embedding bootstrap: service wired into IPC listener")
+            ErrorHandler.logInfo("Embedding bootstrap: service wired (model=embeddinggemma-300m, dim=768)")
         }
     }
 

@@ -387,7 +387,7 @@ CONTEXT_RESULT='{"weighted_tags":[],"domain":null}'
 # SRC-01: Read actual diff content (not just file names), capped at 50KB
 SIDEQUEST_DIFF=""
 if git rev-parse --git-dir >/dev/null 2>&1; then
-  SIDEQUEST_DIFF=$(timeout 1 git diff HEAD~1 2>/dev/null | head -c 51200) || SIDEQUEST_DIFF=""
+  SIDEQUEST_DIFF=$(perl -e 'alarm 1; exec @ARGV' -- git diff HEAD~1 2>/dev/null | head -c 51200) || SIDEQUEST_DIFF=""
 fi
 export SIDEQUEST_DIFF
 
@@ -437,7 +437,7 @@ VECTORS='{"user_vec":null,"asst_vec":null}'
 INFERENCE_MS=""
 
 if [ -n "$USER_MSG" ] || [ -n "$ASST_MSG" ]; then
-  IPC_REQUEST=$(USER_MSG="$USER_MSG" ASST_MSG="$ASST_MSG" python3 -c "
+  IPC_REQUEST=$(SCRIPT_DIR_HOOKS="$SCRIPT_DIR_HOOKS" USER_MSG="$USER_MSG" ASST_MSG="$ASST_MSG" python3 -c "
 import json, os, sys
 sys.path.insert(0, os.environ.get('SCRIPT_DIR_HOOKS', ''))
 try:
@@ -450,14 +450,14 @@ except Exception:
 
   if [ -n "$IPC_REQUEST" ] && [ "$IPC_REQUEST" != "{}" ]; then
     IPC_T_START=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo 0)
-    IPC_RESPONSE=$(printf '%s' "$IPC_REQUEST" | timeout 1 nc -U "$SOCKET_PATH" 2>/dev/null) || IPC_RESPONSE=''
+    IPC_RESPONSE=$(printf '%s' "$IPC_REQUEST" | nc -U -w 2 "$SOCKET_PATH" 2>/dev/null) || IPC_RESPONSE=''
     IPC_T_END=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo 0)
     if [ "$IPC_T_START" -gt 0 ] && [ "$IPC_T_END" -gt "$IPC_T_START" ]; then
       INFERENCE_MS=$((IPC_T_END - IPC_T_START))
     fi
 
     if [ -n "$IPC_RESPONSE" ]; then
-      VECTORS=$(IPC_RESPONSE="$IPC_RESPONSE" python3 -c "
+      VECTORS=$(SCRIPT_DIR_HOOKS="$SCRIPT_DIR_HOOKS" IPC_RESPONSE="$IPC_RESPONSE" python3 -c "
 import json, os, sys
 sys.path.insert(0, os.environ.get('SCRIPT_DIR_HOOKS', ''))
 try:

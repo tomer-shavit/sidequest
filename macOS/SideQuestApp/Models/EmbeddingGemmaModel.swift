@@ -21,9 +21,20 @@ actor EmbeddingGemmaModel {
     return "\(modelCachePath)/\(modelName)-\(modelVersion).mlmodelc"
   }
 
-  /// Filesystem path of the SentencePiece tokenizer.model file.
+  /// Filesystem path of the binary SentencePiece model. Kept for forward
+  /// compat with a future native libsentencepiece path; v2.2 reads
+  /// tokenizer.json instead (see tokenizerJSONPath).
   nonisolated var tokenizerPath: String {
-    return "\(modelCachePath)/\(modelName)-\(modelVersion)-tokenizer.model"
+    return "\(modelCachePath)/tokenizer.model"
+  }
+
+  /// Filesystem path of the **base64-keyed** tokenizer file shipped at the
+  /// root of the model tarball. SentencePieceTokenizer reads this for
+  /// vocab + merges + byte_fallback. The base64 indirection sidesteps
+  /// JSONSerialization's silent NFC/BOM normalization on string keys —
+  /// see SentencePieceTokenizer doc comment.
+  nonisolated var tokenizerJSONPath: String {
+    return "\(modelCachePath)/tokenizer-b64.json"
   }
 
   /// Attempts to load model from cache; fetches from S3 if not cached.

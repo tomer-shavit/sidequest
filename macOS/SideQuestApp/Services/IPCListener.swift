@@ -246,10 +246,12 @@ class IPCListener {
             ErrorHandler.logInfo("Embedding inference timeout after \(elapsed)ms")
         } else {
             let (userVec, asstVec) = box.get()
-            if let vec = userVec, vec.count == 384 {
+            // Accept any valid embedding dim (384 MiniLM, 768 EmbeddingGemma, future others).
+            // Server uses model_version field on each chunk to route 384 vs 768 SQL.
+            if let vec = userVec, vec.count == 384 || vec.count == 768 {
                 response["user_vec"] = vec
             }
-            if let vec = asstVec, vec.count == 384 {
+            if let vec = asstVec, vec.count == 384 || vec.count == 768 {
                 response["asst_vec"] = vec
             }
         }

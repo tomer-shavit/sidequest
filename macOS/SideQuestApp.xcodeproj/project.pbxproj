@@ -35,6 +35,7 @@
 		A10025 /* QuestPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025 /* QuestPresenter.swift */; };
 		A10026 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10026 /* HotkeyManager.swift */; };
 		A10030 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = B10030 /* Fonts */; };
+		A10031 /* menubar-icon.png in Resources */ = {isa = PBXBuildFile; fileRef = B10031 /* menubar-icon.png */; };
 		B0B875A15CE33FBA2B6858A3 /* WordPieceTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5325B9B72976F83066B0FECD /* WordPieceTokenizer.swift */; };
 		B8917D0DEF378EA46BE18147 /* TokenizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B09813D6F928C346179330B2 /* TokenizerTests.swift */; };
 		BCD8274D2751B3DA9DEF9946 /* EmbeddingGemmaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8093CFBCC65682EDCD08B640 /* EmbeddingGemmaModel.swift */; };
@@ -82,6 +83,7 @@
 		B10025 /* QuestPresenter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = QuestPresenter.swift; sourceTree = "<group>"; };
 		B10026 /* HotkeyManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		B10030 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = Resources/Fonts; sourceTree = "<group>"; };
+		B10031 /* menubar-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "menubar-icon.png"; path = "Resources/menubar-icon.png"; sourceTree = "<group>"; };
 		B10100 /* SideQuestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SideQuestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C63CB7169561FFB3CF317CB2 /* ModelFetchTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ModelFetchTests.swift; path = SideQuestAppTests/ModelFetchTests.swift; sourceTree = "<group>"; };
 		E8B3A23FD11303FA5AFD5678 /* EmbeddingModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EmbeddingModel.swift; path = SideQuestApp/Models/EmbeddingModel.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 			isa = PBXGroup;
 			children = (
 				B10030 /* Fonts */,
+				B10031 /* menubar-icon.png */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -296,6 +299,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10030 /* Fonts in Resources */,
+				A10031 /* menubar-icon.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -8,7 +8,11 @@ struct SideQuestApp: App {
         MenuBarExtra {
             MenuContentView(appDelegate: appDelegate)
         } label: {
-            Image(systemName: "bell")
+            Image("menubar-icon")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 18, height: 18)
                 .help("SideQuest — Quest notifications")
         }
         .menuBarExtraStyle(.menu)

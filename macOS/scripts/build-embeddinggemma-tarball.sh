@@ -184,10 +184,38 @@ for key in list(ml_model.user_defined_metadata.keys()):
 ml_model.save('embeddinggemma-300m-1.0.mlpackage')
 print('[build] saved embeddinggemma-300m-1.0.mlpackage')
 
-# Extract SentencePiece tokenizer
-tokenizer_paths = tokenizer.save_vocabulary('.')
-print('[build] tokenizer files:', tokenizer_paths)
-print('[build] done with Python conversion step')
+# Save the full HuggingFace tokenizer bundle (tokenizer.json +
+# tokenizer_config.json + special_tokens_map.json + added_tokens.json +
+# tokenizer.model). Kept for diagnostics + future C++ sentencepiece path.
+tokenizer.save_pretrained('.')
+print('[build] saved full HF tokenizer bundle')
+
+# Convert tokenizer.json into a Swift-safe base64-keyed form. Apple's
+# JSONSerialization silently NFC-normalizes string keys via NSString
+# interning, which collapses ~430 distinct Gemma vocab entries that
+# differ only by combining marks or a leading U+FEFF. base64-encoding
+# every key sidesteps every Unicode-equivalence path in Foundation —
+# the Swift tokenizer decodes back to raw bytes for byte-exact lookup.
+import json, base64
+with open('tokenizer.json') as f:
+    tj = json.load(f)
+v = tj['model']['vocab']
+merges = tj['model']['merges']
+added = tj.get('added_tokens', [])
+def b64(s): return base64.b64encode(s.encode('utf-8')).decode('ascii')
+out = {
+    'bos_id': v.get('<bos>', 2),
+    'eos_id': v.get('<eos>', 1),
+    'unk_id': v.get('<unk>', 3),
+    'vocab': [[b64(k), val] for k, val in v.items()],
+    'merges': [[b64(m[0]), b64(m[1])] if isinstance(m, list)
+               else [b64(m.split(' ')[0]), b64(m.split(' ', 1)[1])] for m in merges],
+    'added_tokens': [{'b64_content': b64(a['content']), 'id': a['id']} for a in added],
+    'byte_fallback': [v.get(f'<0x{b:02X}>', -1) for b in range(256)],
+}
+with open('tokenizer-b64.json', 'w') as f:
+    json.dump(out, f)
+print(f"[build] wrote tokenizer-b64.json: vocab={len(out['vocab'])} merges={len(out['merges'])} added={len(out['added_tokens'])} bytes={sum(1 for x in out['byte_fallback'] if x>=0)}/256")
 PYTHON
 
 # --- Step 3: compile .mlmodel -> .mlmodelc ----------------------------------
@@ -213,19 +241,18 @@ with open(path, 'w') as f:
     f.write('\n')
 PYTHON
 
-# --- Step 4: verify tokenizer exists -----------------------------------------
+# --- Step 4: verify all required artifacts exist -----------------------------
 
-# SentencePiece tokenizer will be saved by the conversion step
-[ -f "${TOKENIZER}" ] || {
-  echo "[build] ERROR: ${TOKENIZER} not present at tar time" >&2
-  exit 1
-}
+for required in "${TOKENIZER}" tokenizer.json tokenizer-b64.json tokenizer_config.json special_tokens_map.json; do
+  [ -f "${required}" ] || {
+    echo "[build] ERROR: ${required} not present at tar time" >&2
+    exit 1
+  }
+done
 
-# --- Step 5: deterministic tarball (model dir + tokenizer) -------------------
+# --- Step 5: deterministic tarball (model dir + tokenizer files) -------------
 
 echo "[build] step 5: deterministic tar (sort=name, mtime=${TAR_MTIME}, owner=0)"
-# macOS BSD tar lacks --sort=name; require GNU tar (gtar on Mac via
-# `brew install gnu-tar`, plain tar on Linux CI).
 if command -v gtar >/dev/null 2>&1; then
   TAR_BIN=gtar
 elif tar --version 2>/dev/null | grep -q "GNU tar"; then
@@ -242,7 +269,11 @@ fi
     --use-compress-program="gzip -n" \
     -cf "${TARBALL}" \
     "${MLMODELC}" \
-    "${TOKENIZER}"
+    "${TOKENIZER}" \
+    tokenizer.json \
+    tokenizer-b64.json \
+    tokenizer_config.json \
+    special_tokens_map.json
 
 # --- Step 6: verify size + emit SHA256 + URL hint ---------------------------
 

@@ -1,9 +1,628 @@
 [
   {
-    "_pending_real_tokens": true,
-    "_note": "Run 'python3 client/macOS/scripts/generate-tokenizer-fixtures.py' to populate real token IDs from HF transformers",
     "text": "hello world",
-    "expected_token_ids": [],
+    "expected_token_ids": [
+      2,
+      23391,
+      1902,
+      1
+    ],
     "description": "basic english"
+  },
+  {
+    "text": "The quick brown fox",
+    "expected_token_ids": [
+      2,
+      818,
+      3823,
+      8864,
+      37423,
+      1
+    ],
+    "description": "english phrase"
+  },
+  {
+    "text": "async/await",
+    "expected_token_ids": [
+      2,
+      13140,
+      236786,
+      25309,
+      1
+    ],
+    "description": "code with punctuation"
+  },
+  {
+    "text": "import { useState } from 'react'",
+    "expected_token_ids": [
+      2,
+      1106,
+      642,
+      13171,
+      682,
+      699,
+      756,
+      5966,
+      236789,
+      1
+    ],
+    "description": "javascript import"
+  },
+  {
+    "text": "def calculate(x: int) -> float:",
+    "expected_token_ids": [
+      2,
+      2063,
+      9279,
+      236769,
+      236781,
+      236787,
+      801,
+      236768,
+      3921,
+      6803,
+      236787,
+      1
+    ],
+    "description": "python function"
+  },
+  {
+    "text": "const data = await fetch(url)",
+    "expected_token_ids": [
+      2,
+      1987,
+      1262,
+      578,
+      4825,
+      12270,
+      236769,
+      2451,
+      236768,
+      1
+    ],
+    "description": "async javascript"
+  },
+  {
+    "text": "🚀 rocket",
+    "expected_token_ids": [
+      2,
+      242015,
+      35305,
+      1
+    ],
+    "description": "emoji with text"
+  },
+  {
+    "text": "Hello 世界",
+    "expected_token_ids": [
+      2,
+      9259,
+      84679,
+      1
+    ],
+    "description": "chinese characters"
+  },
+  {
+    "text": "Привет мир",
+    "expected_token_ids": [
+      2,
+      116130,
+      58562,
+      1
+    ],
+    "description": "russian text"
+  },
+  {
+    "text": "مرحبا بالعالم",
+    "expected_token_ids": [
+      2,
+      236873,
+      150345,
+      107602,
+      17193,
+      1
+    ],
+    "description": "arabic text"
+  },
+  {
+    "text": "",
+    "expected_token_ids": [
+      2,
+      1
+    ],
+    "description": "empty string"
+  },
+  {
+    "text": "x",
+    "expected_token_ids": [
+      2,
+      236781,
+      1
+    ],
+    "description": "single character"
+  },
+  {
+    "text": "   spaces only   ",
+    "expected_token_ids": [
+      2,
+      139,
+      35220,
+      1186,
+      139,
+      1
+    ],
+    "description": "whitespace"
+  },
+  {
+    "text": "!!!???",
+    "expected_token_ids": [
+      2,
+      11145,
+      31237,
+      1
+    ],
+    "description": "special characters only"
+  },
+  {
+    "text": "ALLCAPS",
+    "expected_token_ids": [
+      2,
+      7602,
+      31832,
+      236773,
+      1
+    ],
+    "description": "all uppercase"
+  },
+  {
+    "text": "mixedCASE",
+    "expected_token_ids": [
+      2,
+      63258,
+      49710,
+      1
+    ],
+    "description": "mixed case"
+  },
+  {
+    "text": "snake_case_text",
+    "expected_token_ids": [
+      2,
+      37942,
+      236779,
+      4925,
+      236779,
+      1005,
+      1
+    ],
+    "description": "underscore separated"
+  },
+  {
+    "text": "kebab-case-text",
+    "expected_token_ids": [
+      2,
+      236767,
+      46109,
+      236772,
+      4925,
+      236772,
+      1005,
+      1
+    ],
+    "description": "hyphen separated"
+  },
+  {
+    "text": "The Python programming language is widely used in data science.",
+    "expected_token_ids": [
+      2,
+      818,
+      17856,
+      14929,
+      5192,
+      563,
+      12865,
+      1456,
+      528,
+      1262,
+      6647,
+      236761,
+      1
+    ],
+    "description": "long english"
+  },
+  {
+    "text": "const sum = (a, b) => a + b;",
+    "expected_token_ids": [
+      2,
+      1987,
+      2324,
+      578,
+      568,
+      236746,
+      236764,
+      518,
+      236768,
+      1477,
+      496,
+      900,
+      518,
+      236793,
+      1
+    ],
+    "description": "arrow function"
+  },
+  {
+    "text": "SELECT * FROM users WHERE id = 1;",
+    "expected_token_ids": [
+      2,
+      12874,
+      808,
+      10912,
+      5089,
+      17347,
+      1846,
+      578,
+      236743,
+      236770,
+      236793,
+      1
+    ],
+    "description": "sql query"
+  },
+  {
+    "text": "for (let i = 0; i < 10; i++) { console.log(i); }",
+    "expected_token_ids": [
+      2,
+      1708,
+      568,
+      1184,
+      858,
+      578,
+      236743,
+      236771,
+      236793,
+      858,
+      655,
+      236743,
+      236770,
+      236771,
+      236793,
+      858,
+      4419,
+      642,
+      3554,
+      236761,
+      1587,
+      236769,
+      236747,
+      626,
+      682,
+      1
+    ],
+    "description": "javascript loop"
+  },
+  {
+    "text": "if __name__ == '__main__':",
+    "expected_token_ids": [
+      2,
+      584,
+      5062,
+      1201,
+      1269,
+      1251,
+      32204,
+      3241,
+      35427,
+      1
+    ],
+    "description": "python main check"
+  },
+  {
+    "text": "Check out https://example.com for more info!",
+    "expected_token_ids": [
+      2,
+      6845,
+      855,
+      4560,
+      1411,
+      8358,
+      236761,
+      854,
+      573,
+      919,
+      8283,
+      236888,
+      1
+    ],
+    "description": "url with text"
+  },
+  {
+    "text": "Email: user@example.com",
+    "expected_token_ids": [
+      2,
+      11919,
+      236787,
+      2430,
+      236940,
+      8358,
+      236761,
+      854,
+      1
+    ],
+    "description": "email address"
+  },
+  {
+    "text": "Phone: +1-234-567-8900",
+    "expected_token_ids": [
+      2,
+      9704,
+      236787,
+      900,
+      236770,
+      236772,
+      236778,
+      236800,
+      236812,
+      236772,
+      236810,
+      236825,
+      236832,
+      236772,
+      236828,
+      236819,
+      236771,
+      236771,
+      1
+    ],
+    "description": "phone number"
+  },
+  {
+    "text": "Price: $99.99 USD",
+    "expected_token_ids": [
+      2,
+      11280,
+      236787,
+      609,
+      236819,
+      236819,
+      236761,
+      236819,
+      236819,
+      23058,
+      1
+    ],
+    "description": "currency"
+  },
+  {
+    "text": "Write a Python function to calculate fibonacci",
+    "expected_token_ids": [
+      2,
+      6974,
+      496,
+      17856,
+      1292,
+      531,
+      9279,
+      10779,
+      78113,
+      1
+    ],
+    "description": "task description"
+  },
+  {
+    "text": "async function fetchData(endpoint) { ... }",
+    "expected_token_ids": [
+      2,
+      13140,
+      1292,
+      131700,
+      236769,
+      52230,
+      236768,
+      642,
+      3729,
+      682,
+      1
+    ],
+    "description": "async code"
+  },
+  {
+    "text": "type User = { id: string; email: string }",
+    "expected_token_ids": [
+      2,
+      2084,
+      7486,
+      578,
+      642,
+      1846,
+      236787,
+      2483,
+      236793,
+      4553,
+      236787,
+      2483,
+      682,
+      1
+    ],
+    "description": "typescript type"
+  },
+  {
+    "text": "Hello, world! How are you?",
+    "expected_token_ids": [
+      2,
+      9259,
+      236764,
+      1902,
+      236888,
+      2088,
+      659,
+      611,
+      236881,
+      1
+    ],
+    "description": "punctuation heavy"
+  },
+  {
+    "text": "Don't worry—it's fine.",
+    "expected_token_ids": [
+      2,
+      8993,
+      236789,
+      236745,
+      12141,
+      237028,
+      509,
+      236789,
+      236751,
+      5851,
+      236761,
+      1
+    ],
+    "description": "apostrophe and dash"
+  },
+  {
+    "text": "what???",
+    "expected_token_ids": [
+      2,
+      14070,
+      31237,
+      1
+    ],
+    "description": "repeated punctuation"
+  },
+  {
+    "text": "(nested (parentheses (are) tricky))",
+    "expected_token_ids": [
+      2,
+      236769,
+      103895,
+      568,
+      5432,
+      48251,
+      568,
+      733,
+      236768,
+      41086,
+      1223,
+      1
+    ],
+    "description": "nested parens"
+  },
+  {
+    "text": "tabs\there",
+    "expected_token_ids": [
+      2,
+      39218,
+      255968,
+      8472,
+      1
+    ],
+    "description": "tab character"
+  },
+  {
+    "text": "newline\nhere",
+    "expected_token_ids": [
+      2,
+      73481,
+      107,
+      8472,
+      1
+    ],
+    "description": "newline character"
+  },
+  {
+    "text": "mixed  spacing",
+    "expected_token_ids": [
+      2,
+      63258,
+      138,
+      25370,
+      1
+    ],
+    "description": "multiple spaces"
+  },
+  {
+    "text": "👋 👨‍💻 🔥 ✨",
+    "expected_token_ids": [
+      2,
+      242687,
+      236743,
+      243874,
+      237243,
+      244862,
+      128728,
+      73687,
+      1
+    ],
+    "description": "multiple emoji"
+  },
+  {
+    "text": "🎉🎊🎈",
+    "expected_token_ids": [
+      2,
+      242061,
+      244032,
+      244586,
+      1
+    ],
+    "description": "emoji only"
+  },
+  {
+    "text": "This is a SideQuest AI testing fixture",
+    "expected_token_ids": [
+      2,
+      2094,
+      563,
+      496,
+      19222,
+      32188,
+      12498,
+      7257,
+      26215,
+      1
+    ],
+    "description": "testing context"
+  },
+  {
+    "text": "Embedding model inference on Apple Neural Engine",
+    "expected_token_ids": [
+      2,
+      205511,
+      2028,
+      34711,
+      580,
+      9947,
+      63295,
+      7850,
+      1
+    ],
+    "description": "ANE context"
+  },
+  {
+    "text": "768-dimensional vector space",
+    "expected_token_ids": [
+      2,
+      236832,
+      236825,
+      236828,
+      236772,
+      12108,
+      3550,
+      2557,
+      1
+    ],
+    "description": "numeric context"
+  },
+  {
+    "text": "gradient descent optimization algorithm",
+    "expected_token_ids": [
+      2,
+      27761,
+      33975,
+      18088,
+      8417,
+      1
+    ],
+    "description": "ML context"
   }
 ]
