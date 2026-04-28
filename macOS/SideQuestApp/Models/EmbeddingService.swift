@@ -91,17 +91,6 @@ actor EmbeddingService {
   }
 }
 
-/// Backend wrapping the legacy MiniLM EmbeddingModel + EmbeddingInference (384-dim).
-struct MiniLMBackend: EmbeddingBackend {
-  let model: EmbeddingModel
-  let inference: EmbeddingInference
-
-  func embed(tokenIds: [Int]) async -> [Float]? {
-    let tokenIds32 = tokenIds.map { Int32($0) }
-    return await inference.run(tokenIds: tokenIds32, model: model, timeout: 1000)
-  }
-}
-
 /// Backend wrapping EmbeddingGemmaModel (768-dim, native attention_mask path).
 struct GemmaBackend: EmbeddingBackend {
   let model: EmbeddingGemmaModel
