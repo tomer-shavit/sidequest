@@ -411,7 +411,7 @@ struct SideQuestCard_Previews: PreviewProvider {
                 onOpen: {},
                 onDismiss: {},
                 hoverState: QuestHoverState(),
-                dismissDuration: 7.0
+                dismissDuration: 12.0
             )
             SideQuestCard(
                 questData: QuestData(
@@ -426,7 +426,7 @@ struct SideQuestCard_Previews: PreviewProvider {
                 onOpen: {},
                 onDismiss: {},
                 hoverState: QuestHoverState(),
-                dismissDuration: 7.0
+                dismissDuration: 12.0
             )
         }
         .padding(24)

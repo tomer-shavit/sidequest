@@ -55,7 +55,7 @@ enum SQMetric {
     static let closeSize:       CGFloat = 20
 
     // Stack + presenter tunables (preserved from prior implementation)
-    static let defaultDuration: TimeInterval = 7.0
+    static let defaultDuration: TimeInterval = 12.0
     static let stackGap:        CGFloat = 10
     static let stackMaxVisible: Int = 3
     static let topInset:        CGFloat = 48
