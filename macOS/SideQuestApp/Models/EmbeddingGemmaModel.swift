@@ -158,7 +158,9 @@ actor EmbeddingGemmaModel {
   }
 
   /// Fetches model from S3 with exponential backoff retry.
-  /// 3 attempts with 1s, 2s, 4s delays. 30s total timeout.
+  /// 3 attempts with 1s, 2s, 4s delays. 10 min total timeout — tarball
+  /// is ~272 MB, so the prior 30s budget required 73 Mbit/s sustained
+  /// and silently timed out for most users.
   /// Verifies SHA256 before caching. Returns true on success.
   private func fetchFromS3() async -> Bool {
     let home = FileManager.default.homeDirectoryForCurrentUser
@@ -187,8 +189,15 @@ actor EmbeddingGemmaModel {
       return false
     }
 
-    // Download with retry (1s, 2s, 4s backoff)
-    let deadline = Date().addingTimeInterval(30.0)
+    // Download with retry (1s, 2s, 4s backoff). Tarball is ~272 MB; the
+    // shared URLSession's default 60s request timeout will fire on slow
+    // links even when bytes are still flowing, so we use a dedicated
+    // configuration with generous per-request and per-resource ceilings.
+    let deadline = Date().addingTimeInterval(600.0)
+    let configuration = URLSessionConfiguration.default
+    configuration.timeoutIntervalForRequest = 300
+    configuration.timeoutIntervalForResource = 600
+    let session = URLSession(configuration: configuration)
     for attempt in 0..<3 {
       guard Date() < deadline else {
         ErrorHandler.logInfo("EmbeddingGemmaModel: Fetch timeout exceeded")
@@ -201,7 +210,7 @@ actor EmbeddingGemmaModel {
       }
 
       do {
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(from: url)
         let actualSHA = SHA256.hash(data: data)
         let computedHash = actualSHA.map { String(format: "%02x", $0) }.joined()
 
